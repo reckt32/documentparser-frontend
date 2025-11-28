@@ -1,0 +1,869 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+
+/// Multi-step financial questionnaire.
+/// Sections: personal_info, family_info, goals, risk_profile, insurance, lifestyle, estate (placeholder).
+/// Branching rules:
+/// - maritalStatus == Married => spouse fields
+/// - childrenCount > 0 => children list
+/// - hasDependents == true => dependents list
+/// - addGoals == true => dynamic goals
+class QuestionnaireScreen extends StatefulWidget {
+  final String backendUrl;
+  final int? questionnaireId;
+  final ValueChanged<int> onQuestionnaireStarted;
+
+  const QuestionnaireScreen({
+    super.key,
+    required this.backendUrl,
+    required this.onQuestionnaireStarted,
+    this.questionnaireId,
+  });
+
+  @override
+  State<QuestionnaireScreen> createState() => _QuestionnaireScreenState();
+}
+
+class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
+  int _stepIndex = 0;
+  int? _qid;
+
+  // Personal Info
+  final _nameCtrl = TextEditingController();
+  final _ageCtrl = TextEditingController();
+  final _panCtrl = TextEditingController();
+  final _dobCtrl = TextEditingController();
+  final _contactCtrl = TextEditingController();
+  String _maritalStatus = 'Single';
+
+  // Family Info
+  final _spouseNameCtrl = TextEditingController();
+  int _childrenCount = 0;
+  final List<Map<String, TextEditingController>> _childrenCtrls = [];
+  bool _hasDependents = false;
+  final List<Map<String, TextEditingController>> _dependentsCtrls = [];
+
+  // Goals
+  bool _addGoals = true;
+  final List<Map<String, TextEditingController>> _goalCtrls = [];
+
+  // Risk Profile
+  String _riskTolerance = 'Medium';
+  String _primaryHorizon = 'Medium';
+  // Advanced risk inputs
+  final _lossToleranceCtrl = TextEditingController();
+  final _primaryHorizonYearsCtrl = TextEditingController();
+  String _goalImportance = 'Important';
+  String _goalFlexibility = 'Fixed';
+  String _behavior = 'Hold';
+  String _incomeStability = 'Average';
+  final _emergencyFundMonthsCtrl = TextEditingController();
+  final _equityAllocationCtrl = TextEditingController();
+
+  // Insurance
+  final _lifeCoverCtrl = TextEditingController();
+  final _healthCoverCtrl = TextEditingController();
+  bool _hasInsuranceDocs = true;
+
+  // Lifestyle
+  final _annualIncomeCtrl = TextEditingController();
+  final _monthlyExpensesCtrl = TextEditingController();
+  final _monthlyEmiCtrl = TextEditingController();
+  final _emergencyFundCtrl = TextEditingController();
+  final _savingsPercentCtrl = TextEditingController();
+  String _savingsBand = '';
+  final List<String> _currentProducts = [];
+  final Map<String, TextEditingController> _allocationCtrls = {
+    'equity': TextEditingController(),
+    'debt': TextEditingController(),
+    'gold': TextEditingController(),
+    'realEstate': TextEditingController(),
+    'insuranceLinked': TextEditingController(),
+    'cash': TextEditingController(),
+  };
+
+  // Estate (placeholder basic)
+  final _willStatusCtrl = TextEditingController();
+  final _nomineeConsistencyCtrl = TextEditingController();
+
+  bool _loading = false;
+  String _statusMessage = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _qid = widget.questionnaireId;
+    if (_qid != null) {
+      _fetchQuestionnaire();
+    }
+  }
+
+  Future<void> _startQuestionnaire() async {
+    if (_loading) return;
+    setState(() {
+      _loading = true;
+      _statusMessage = 'Starting questionnaire...';
+    });
+    try {
+      final resp = await http.post(
+        Uri.parse('${widget.backendUrl}/questionnaire/start'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': 'user'}),
+      );
+      if (resp.statusCode == 201) {
+        final data = jsonDecode(resp.body);
+        final id = data['questionnaire_id'] as int;
+        setState(() {
+          _qid = id;
+          _statusMessage = 'Questionnaire started (ID $id).';
+        });
+        widget.onQuestionnaireStarted(id);
+      } else {
+        setState(() {
+          _statusMessage = 'Failed to start: ${resp.statusCode}';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'Error: $e';
+      });
+    } finally {
+      setState(() {
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _fetchQuestionnaire() async {
+    if (_qid == null) return;
+    try {
+      final resp = await http.get(Uri.parse('${widget.backendUrl}/questionnaire/${_qid}'));
+      if (resp.statusCode == 200) {
+        // Could hydrate fields if needed in future.
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveSection(String section, Map<String, dynamic> payload) async {
+    if (_qid == null) {
+      setState(() {
+        _statusMessage = 'Start questionnaire first.';
+      });
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _statusMessage = 'Saving $section...';
+    });
+    try {
+      final resp = await http.put(
+        Uri.parse('${widget.backendUrl}/questionnaire/${_qid}/$section'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(payload),
+      );
+      if (resp.statusCode == 200) {
+        setState(() {
+          _statusMessage = '$section saved.';
+        });
+      } else {
+        setState(() {
+          _statusMessage = 'Failed to save $section: ${resp.statusCode}';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'Error saving $section: $e';
+      });
+    } finally {
+      setState(() {
+        _loading = false;
+      });
+    }
+  }
+
+  // Section builders
+
+  Widget _buildPersonalInfo() {
+    return _sectionCard(
+      title: 'Personal Info',
+      children: [
+        _textField(_nameCtrl, 'Name'),
+        _textField(_ageCtrl, 'Age (years)', keyboard: TextInputType.number),
+        _textField(_panCtrl, 'PAN'),
+        _textField(_dobCtrl, 'Date of Birth (YYYY-MM-DD)'),
+        _textField(_contactCtrl, 'Contact (Email/Phone)'),
+        _dropdown<String>(
+          label: 'Marital Status',
+          value: _maritalStatus,
+          items: const ['Single', 'Married', 'Other'],
+          onChanged: (v) => setState(() => _maritalStatus = v),
+        ),
+        _saveButton(() {
+          _saveSection('personal_info', {
+            'name': _nameCtrl.text.trim(),
+            'age': _ageCtrl.text.trim(),
+            'pan': _panCtrl.text.trim(),
+            'dob': _dobCtrl.text.trim(),
+            'contact': _contactCtrl.text.trim(),
+            'marital_status': _maritalStatus,
+          });
+        }),
+      ],
+    );
+  }
+
+  Widget _buildFamilyInfo() {
+    return _sectionCard(
+      title: 'Family & Dependents',
+      children: [
+        if (_maritalStatus == 'Married') _textField(_spouseNameCtrl, 'Spouse Name'),
+        Row(
+          children: [
+            Expanded(
+              child: _numberStepper(
+                label: 'Children',
+                value: _childrenCount,
+                onChanged: (v) {
+                  setState(() {
+                    _childrenCount = v;
+                    while (_childrenCtrls.length < v) {
+                      _childrenCtrls.add({
+                        'name': TextEditingController(),
+                        'age': TextEditingController(),
+                      });
+                    }
+                    while (_childrenCtrls.length > v) {
+                      _childrenCtrls.removeLast();
+                    }
+                  });
+                },
+                max: 10,
+              ),
+            ),
+          ],
+        ),
+        for (int i = 0; i < _childrenCtrls.length; i++)
+          _inlineRow([
+            Expanded(child: _textField(_childrenCtrls[i]['name']!, 'Child ${i + 1} Name')),
+            const SizedBox(width: 12),
+            Expanded(child: _textField(_childrenCtrls[i]['age']!, 'Age', keyboard: TextInputType.number)),
+          ]),
+        SwitchListTile(
+          title: const Text('Other Dependents?'),
+            value: _hasDependents,
+            onChanged: (v) {
+              setState(() {
+                _hasDependents = v;
+                if (!v) _dependentsCtrls.clear();
+              });
+            },
+        ),
+        if (_hasDependents)
+          Column(
+            children: [
+              ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    _dependentsCtrls.add({
+                      'name': TextEditingController(),
+                      'relation': TextEditingController(),
+                    });
+                  });
+                },
+                child: const Text('Add Dependent'),
+              ),
+              for (int i = 0; i < _dependentsCtrls.length; i++)
+                _inlineRow([
+                  Expanded(child: _textField(_dependentsCtrls[i]['name']!, 'Dependent ${i + 1} Name')),
+                  const SizedBox(width: 12),
+                  Expanded(child: _textField(_dependentsCtrls[i]['relation']!, 'Relation')),
+                  IconButton(
+                    icon: const Icon(Icons.remove_circle_outline),
+                    onPressed: () {
+                      setState(() {
+                        _dependentsCtrls.removeAt(i);
+                      });
+                    },
+                  )
+                ]),
+            ],
+          ),
+        _saveButton(() {
+          _saveSection('family_info', {
+            'spouse': _maritalStatus == 'Married' ? _spouseNameCtrl.text.trim() : null,
+            'children': _childrenCtrls
+                .map((m) => {
+                      'name': m['name']!.text.trim(),
+                      'age': m['age']!.text.trim(),
+                    })
+                .toList(),
+            'dependents': _hasDependents
+                ? _dependentsCtrls
+                    .map((m) => {
+                          'name': m['name']!.text.trim(),
+                          'relation': m['relation']!.text.trim(),
+                        })
+                    .toList()
+                : [],
+          });
+        }),
+      ],
+    );
+  }
+
+  Widget _buildGoals() {
+    return _sectionCard(
+      title: 'Goals',
+      children: [
+        SwitchListTile(
+          title: const Text('Track Goals?'),
+          value: _addGoals,
+          onChanged: (v) => setState(() => _addGoals = v),
+        ),
+        if (_addGoals)
+          Column(
+            children: [
+              ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    _goalCtrls.add({
+                      'name': TextEditingController(),
+                      'target_amount': TextEditingController(),
+                      'horizon_years': TextEditingController(),
+                      'suggested_strategy': TextEditingController(),
+                    });
+                  });
+                },
+                child: const Text('Add Goal'),
+              ),
+              for (int i = 0; i < _goalCtrls.length; i++)
+                _goalTile(i, _goalCtrls[i]),
+            ],
+          ),
+        _saveButton(() {
+          _saveSection('goals', {
+            'items': _addGoals
+                ? _goalCtrls
+                    .map((g) => {
+                          'name': g['name']!.text.trim(),
+                          'target_amount': g['target_amount']!.text.trim(),
+                          'horizon_years': g['horizon_years']!.text.trim(),
+                          'suggested_strategy': g['suggested_strategy']!.text.trim(),
+                        })
+                    .toList()
+                : [],
+          });
+        }),
+      ],
+    );
+  }
+
+  Widget _goalTile(int i, Map<String, TextEditingController> ctrls) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          children: [
+            _textField(ctrls['name']!, 'Goal ${i + 1} Name'),
+            _inlineRow([
+              Expanded(child: _textField(ctrls['target_amount']!, 'Target (₹)', keyboard: TextInputType.number)),
+              const SizedBox(width: 12),
+              Expanded(child: _textField(ctrls['horizon_years']!, 'Horizon (yrs)', keyboard: TextInputType.number)),
+            ]),
+            _textField(ctrls['suggested_strategy']!, 'Suggested Strategy (optional)'),
+            Align(
+              alignment: Alignment.centerRight,
+              child: IconButton(
+                icon: const Icon(Icons.delete_outline),
+                onPressed: () {
+                  setState(() {
+                    _goalCtrls.removeAt(i);
+                  });
+                },
+              ),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRiskProfile() {
+    return _sectionCard(
+      title: 'Risk Profile',
+      children: [
+        _dropdown<String>(
+          label: 'Risk Tolerance',
+          value: _riskTolerance,
+          items: const ['Low', 'Medium', 'High'],
+          onChanged: (v) => setState(() => _riskTolerance = v),
+        ),
+        _dropdown<String>(
+          label: 'Primary Goal Horizon',
+          value: _primaryHorizon,
+          items: const ['Short', 'Medium', 'Long'],
+          onChanged: (v) => setState(() => _primaryHorizon = v),
+        ),
+        _textField(_primaryHorizonYearsCtrl, 'Primary Horizon (Years)', keyboard: TextInputType.number),
+        _textField(_lossToleranceCtrl, 'Max Short-Term Loss % You Can Tolerate', keyboard: TextInputType.number),
+        _dropdown<String>(
+          label: 'Goal Importance',
+          value: _goalImportance,
+          items: const ['Essential', 'Important', 'Lifestyle'],
+          onChanged: (v) => setState(() => _goalImportance = v),
+        ),
+        _dropdown<String>(
+          label: 'Goal Flexibility',
+          value: _goalFlexibility,
+          items: const ['Critical', 'Fixed', 'Flexible'],
+          onChanged: (v) => setState(() => _goalFlexibility = v),
+        ),
+        _dropdown<String>(
+          label: 'Behaviour In 15% Drop',
+          value: _behavior,
+          items: const ['Sell', 'Reduce', 'Hold', 'Buy', 'Aggressive Buy'],
+          onChanged: (v) => setState(() => _behavior = v),
+        ),
+        _dropdown<String>(
+          label: 'Income Stability',
+          value: _incomeStability,
+          items: const ['Very Unstable', 'Unstable', 'Average', 'Stable', 'Very Stable'],
+          onChanged: (v) => setState(() => _incomeStability = v),
+        ),
+        _textField(_emergencyFundMonthsCtrl, 'Emergency Fund (Months of Expenses)', keyboard: TextInputType.number),
+        _textField(_equityAllocationCtrl, 'Current Equity Allocation % (optional override)', keyboard: TextInputType.number),
+        _saveButton(() {
+          if (_loading) return;
+          String lt = _lossToleranceCtrl.text.trim();
+          String phY = _primaryHorizonYearsCtrl.text.trim();
+          String efm = _emergencyFundMonthsCtrl.text.trim();
+          String eq = _equityAllocationCtrl.text.trim();
+
+          double? parseNum(String s) => s.isEmpty ? null : double.tryParse(s);
+
+          double? ltVal = parseNum(lt);
+          if (lt.isNotEmpty && (ltVal == null || ltVal < 0 || ltVal > 100)) {
+            setState(() {
+              _statusMessage = 'Validation: Max Short-Term Loss % must be between 0 and 100.';
+            });
+            return;
+          }
+
+          double? phVal = parseNum(phY);
+          if (phY.isNotEmpty && (phVal == null || phVal < 0 || phVal > 100)) {
+            setState(() {
+              _statusMessage = 'Validation: Primary Horizon (Years) must be 0–100.';
+            });
+            return;
+          }
+
+          double? efmVal = parseNum(efm);
+          if (efm.isNotEmpty && (efmVal == null || efmVal < 0 || efmVal > 240)) {
+            setState(() {
+              _statusMessage = 'Validation: Emergency Fund Months must be 0–240.';
+            });
+            return;
+          }
+
+          double? eqVal = parseNum(eq);
+          if (eq.isNotEmpty && (eqVal == null || eqVal < 0 || eqVal > 100)) {
+            setState(() {
+              _statusMessage = 'Validation: Equity Allocation % must be 0–100.';
+            });
+            return;
+          }
+
+          _saveSection('risk_profile', {
+            'tolerance': _riskTolerance.toLowerCase(),
+            'primary_horizon': _primaryHorizon.toLowerCase(),
+            'primary_horizon_years': phY,
+            'loss_tolerance_percent': lt,
+            'goal_importance': _goalImportance.toLowerCase(),
+            'goal_flexibility': _goalFlexibility.toLowerCase(),
+            'behavior': _behavior.toLowerCase(),
+            'income_stability': _incomeStability.toLowerCase(),
+            'emergency_fund_months': efm,
+            'equity_allocation_percent': eq,
+          });
+        }),
+      ],
+    );
+  }
+
+  Widget _buildInsurance() {
+    return _sectionCard(
+      title: 'Insurance',
+      children: [
+        SwitchListTile(
+          title: const Text('Insurance documents will be uploaded'),
+          value: _hasInsuranceDocs,
+          onChanged: (v) => setState(() => _hasInsuranceDocs = v),
+        ),
+        if (!_hasInsuranceDocs) _textField(_lifeCoverCtrl, 'Life Cover (₹)', keyboard: TextInputType.number),
+        if (!_hasInsuranceDocs) _textField(_healthCoverCtrl, 'Health Cover (₹)', keyboard: TextInputType.number),
+        _saveButton(() {
+          _saveSection('insurance', {
+            'life_cover': _hasInsuranceDocs ? null : _lifeCoverCtrl.text.trim(),
+            'health_cover': _hasInsuranceDocs ? null : _healthCoverCtrl.text.trim(),
+            'uploaded_docs': _hasInsuranceDocs,
+          });
+        }),
+      ],
+    );
+  }
+
+  Widget _buildLifestyle() {
+    return _sectionCard(
+      title: 'Lifestyle & Allocation',
+      children: [
+        _textField(_annualIncomeCtrl, 'Annual Income (₹)', keyboard: TextInputType.number),
+        _textField(_monthlyExpensesCtrl, 'Monthly Expenses (₹)', keyboard: TextInputType.number),
+        _textField(_monthlyEmiCtrl, 'Monthly EMI (₹)', keyboard: TextInputType.number),
+        _textField(_emergencyFundCtrl, 'Emergency Fund (₹)', keyboard: TextInputType.number),
+        _textField(_savingsPercentCtrl, 'Savings % (if known)', keyboard: TextInputType.number),
+        _dropdown<String>(
+          label: 'Savings Band',
+          value: _savingsBand.isEmpty ? 'Unknown' : _savingsBand,
+          items: const ['Unknown', '<10%', '10-20%', '20-30%', '>30%'],
+          onChanged: (v) => setState(() {
+            _savingsBand = v == 'Unknown' ? '' : v;
+          }),
+        ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            for (final p in ['MF', 'FD', 'Gold', 'Stocks', 'RealEstate'])
+              FilterChip(
+                label: Text(p),
+                selected: _currentProducts.contains(p),
+                onSelected: (sel) {
+                  setState(() {
+                    if (sel) {
+                      _currentProducts.add(p);
+                    } else {
+                      _currentProducts.remove(p);
+                    }
+                  });
+                },
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        const Text('Allocation % (optional total 0-100)', style: TextStyle(fontWeight: FontWeight.bold)),
+        _allocationRow('Equity', _allocationCtrls['equity']!),
+        _allocationRow('Debt', _allocationCtrls['debt']!),
+        _allocationRow('Gold', _allocationCtrls['gold']!),
+        _allocationRow('Real Estate', _allocationCtrls['realEstate']!),
+        _allocationRow('Insurance Linked', _allocationCtrls['insuranceLinked']!),
+        _allocationRow('Cash', _allocationCtrls['cash']!),
+        _saveButton(() {
+          _saveSection('lifestyle', {
+            'annual_income': _annualIncomeCtrl.text.trim(),
+            'monthly_expenses': _monthlyExpensesCtrl.text.trim(),
+            'monthly_emi': _monthlyEmiCtrl.text.trim(),
+            'emergency_fund': _emergencyFundCtrl.text.trim(),
+            'savings_percent': _savingsPercentCtrl.text.trim(),
+            'savings_band': _savingsBand,
+            'products': _currentProducts,
+            'allocation': {
+              for (final e in _allocationCtrls.entries)
+                if (e.value.text.trim().isNotEmpty) e.key: e.value.text.trim(),
+            },
+          });
+        }),
+      ],
+    );
+  }
+
+  Widget _buildEstate() {
+    return _sectionCard(
+      title: 'Estate (Basic)',
+      children: [
+        _textField(_willStatusCtrl, 'Will Status / Notes'),
+        _textField(_nomineeConsistencyCtrl, 'Nominee Consistency Notes'),
+        _saveButton(() {
+          _saveSection('estate', {
+            'will_notes': _willStatusCtrl.text.trim(),
+            'nominee_consistency': _nomineeConsistencyCtrl.text.trim(),
+          });
+        }),
+      ],
+    );
+  }
+
+  // UI Helpers
+
+  Widget _sectionCard({required String title, required List<Widget> children}) {
+    return Card(
+      elevation: 3,
+      margin: const EdgeInsets.symmetric(vertical: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.deepPurple)),
+            const SizedBox(height: 12),
+            ...children,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _textField(TextEditingController c, String label,
+      {TextInputType keyboard = TextInputType.text}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: TextField(
+        controller: c,
+        keyboardType: keyboard,
+        decoration: InputDecoration(
+          labelText: label,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
+    );
+  }
+
+  Widget _dropdown<T>({
+    required String label,
+    required T value,
+    required List<T> items,
+    required ValueChanged<T> onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<T>(
+            value: value,
+            items: items
+                .map((e) => DropdownMenuItem<T>(
+                      value: e,
+                      child: Text(e.toString()),
+                    ))
+                .toList(),
+            onChanged: (v) {
+              if (v != null) onChanged(v);
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _numberStepper({
+    required String label,
+    required int value,
+    required ValueChanged<int> onChanged,
+    int max = 10,
+  }) {
+    return Row(
+      children: [
+        Text(label),
+        const SizedBox(width: 12),
+        IconButton(
+          icon: const Icon(Icons.remove),
+          onPressed: value > 0 ? () => onChanged(value - 1) : null,
+        ),
+        Text(value.toString()),
+        IconButton(
+          icon: const Icon(Icons.add),
+          onPressed: value < max ? () => onChanged(value + 1) : null,
+        ),
+      ],
+    );
+  }
+
+  Widget _inlineRow(List<Widget> children) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(children: children),
+    );
+  }
+
+  Widget _allocationRow(String label, TextEditingController c) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          SizedBox(width: 130, child: Text(label)),
+          Expanded(
+            child: TextField(
+              controller: c,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                hintText: '%',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _saveButton(VoidCallback onPressed) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: ElevatedButton(
+        onPressed: _loading ? null : onPressed,
+        child: const Text('Save Section'),
+      ),
+    );
+  }
+
+  List<Widget> _steps() {
+    return [
+      _buildPersonalInfo(),
+      _buildFamilyInfo(),
+      _buildGoals(),
+      _buildRiskProfile(),
+      _buildInsurance(),
+      _buildLifestyle(),
+      _buildEstate(),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final steps = _steps();
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Questionnaire'),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Colors.white,
+      ),
+      body: _qid == null
+          ? Center(
+              child: _loading
+                  ? const CircularProgressIndicator()
+                  : ElevatedButton.icon(
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('Start Questionnaire'),
+                      onPressed: _startQuestionnaire,
+                    ),
+            )
+          : Column(
+              children: [
+                _progressIndicator(steps.length),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: steps[_stepIndex],
+                  ),
+                ),
+                _navigationBar(steps.length),
+                if (_statusMessage.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text(
+                      _statusMessage,
+                      style: TextStyle(
+                        color: _statusMessage.contains('Error') ? Colors.red : Colors.green,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+
+  Widget _progressIndicator(int total) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: LinearProgressIndicator(
+        value: (_stepIndex + 1) / total,
+        backgroundColor: Colors.grey.shade300,
+        color: Colors.deepPurple,
+      ),
+    );
+  }
+
+  Widget _navigationBar(int total) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Row(
+        children: [
+          if (_stepIndex > 0)
+            ElevatedButton(
+              onPressed: _loading
+                  ? null
+                  : () {
+                      setState(() {
+                        _stepIndex--;
+                      });
+                    },
+              child: const Text('Back'),
+            ),
+          const Spacer(),
+          Text('Step ${_stepIndex + 1} / $total'),
+          const Spacer(),
+          ElevatedButton(
+            onPressed: _loading
+                ? null
+                : () {
+                    setState(() {
+                      if (_stepIndex < total - 1) {
+                        _stepIndex++;
+                      }
+                    });
+                  },
+            child: Text(_stepIndex == total - 1 ? 'End' : 'Next'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _ageCtrl.dispose();
+    _panCtrl.dispose();
+    _dobCtrl.dispose();
+    _contactCtrl.dispose();
+    _spouseNameCtrl.dispose();
+    for (final m in _childrenCtrls) {
+      m['name']!.dispose();
+      m['age']!.dispose();
+    }
+    for (final m in _dependentsCtrls) {
+      m['name']!.dispose();
+      m['relation']!.dispose();
+    }
+    for (final m in _goalCtrls) {
+      m['name']!.dispose();
+      m['target_amount']!.dispose();
+      m['horizon_years']!.dispose();
+      m['suggested_strategy']!.dispose();
+    }
+    _lifeCoverCtrl.dispose();
+    _healthCoverCtrl.dispose();
+    _annualIncomeCtrl.dispose();
+    _monthlyExpensesCtrl.dispose();
+    _monthlyEmiCtrl.dispose();
+    _emergencyFundCtrl.dispose();
+    _savingsPercentCtrl.dispose();
+    for (final c in _allocationCtrls.values) {
+      c.dispose();
+    }
+    _willStatusCtrl.dispose();
+    _nomineeConsistencyCtrl.dispose();
+    _lossToleranceCtrl.dispose();
+    _primaryHorizonYearsCtrl.dispose();
+    _emergencyFundMonthsCtrl.dispose();
+    _equityAllocationCtrl.dispose();
+    super.dispose();
+  }
+}
