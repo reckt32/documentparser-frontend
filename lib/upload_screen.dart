@@ -57,6 +57,7 @@ class _UploadScreenState extends State<UploadScreen> {
   bool _isLoading = false;
   String _message = '';
   String? _downloadUrl;
+  String? _cachedPdfPath;
   int? _questionnaireId;
 
   @override
@@ -161,6 +162,7 @@ class _UploadScreenState extends State<UploadScreen> {
       _isLoading = true;
       _message = 'Uploading documents...';
       _downloadUrl = null;
+      _cachedPdfPath = null;
     });
 
     try {
@@ -232,6 +234,26 @@ class _UploadScreenState extends State<UploadScreen> {
       return;
     }
 
+    // If we have a cached PDF, open it directly
+    if (_cachedPdfPath != null && !kIsWeb) {
+      final cachedFile = File(_cachedPdfPath!);
+      if (await cachedFile.exists()) {
+        setState(() {
+          _message = 'Opening cached PDF...';
+        });
+        await OpenFilex.open(_cachedPdfPath!);
+        setState(() {
+          _message = 'PDF opened from cache.';
+        });
+        return;
+      } else {
+        // Cache file was deleted, clear the cached path
+        setState(() {
+          _cachedPdfPath = null;
+        });
+      }
+    }
+
     setState(() {
       _isLoading = true;
       _message = 'Downloading PDF...';
@@ -248,18 +270,25 @@ class _UploadScreenState extends State<UploadScreen> {
 
         if (response.statusCode == 200) {
           final directory = await getApplicationDocumentsDirectory();
-          final filePath = '${directory.path}/downloaded_summary.pdf';
+          final timestamp = DateTime.now().millisecondsSinceEpoch;
+          final filePath = '${directory.path}/summary_$timestamp.pdf';
           final file = File(filePath);
           await file.writeAsBytes(response.bodyBytes);
 
           setState(() {
+            _cachedPdfPath = filePath;
             _message = 'PDF downloaded to: $filePath';
           });
 
           await OpenFilex.open(filePath);
+        } else if (response.statusCode == 404) {
+          setState(() {
+            _downloadUrl = null;
+            _message = 'PDF no longer available. Please upload documents again to generate a new PDF.';
+          });
         } else {
           setState(() {
-            _message = 'Failed to download PDF: ${response.statusCode}';
+            _message = 'Failed to download PDF: ${response.statusCode}, ${response.reasonPhrase}';
           });
         }
       }
@@ -396,8 +425,8 @@ class _UploadScreenState extends State<UploadScreen> {
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: _downloadPdf,
-                    icon: const Icon(Icons.download),
-                    label: const Text('Download Summary PDF'),
+                    icon: Icon(_cachedPdfPath != null ? Icons.open_in_new : Icons.download),
+                    label: Text(_cachedPdfPath != null ? 'Open Summary PDF' : 'Download Summary PDF'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.deepPurple,
                       foregroundColor: Colors.white,
