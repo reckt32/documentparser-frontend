@@ -8,6 +8,7 @@ import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:frontend/constants.dart';
 
 enum DocumentType {
   bankStatement,
@@ -57,8 +58,6 @@ class _UploadScreenState extends State<UploadScreen> {
   String _message = '';
   String? _downloadUrl;
   int? _questionnaireId;
-
-  final String _backendUrl = 'http://127.0.0.1:5000';
 
   @override
   void initState() {
@@ -167,7 +166,7 @@ class _UploadScreenState extends State<UploadScreen> {
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('$_backendUrl/upload'),
+        Uri.parse('$kBackendUrl/upload'),
       );
 
       // Attach questionnaireId if present

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:frontend/dashboard_screen.dart';
 import 'package:frontend/upload_screen.dart';
 import 'package:frontend/questionnaire_screen.dart';
+import 'package:frontend/constants.dart';
 
 class MainAppScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -15,12 +16,11 @@ class MainAppScreen extends StatefulWidget {
 class _MainAppScreenState extends State<MainAppScreen> {
   int _selectedIndex = 0; // 0: Questionnaire, 1: Dashboard, 2: Doc Upload
   int? _questionnaireId;
-  final String _backendUrl = 'http://127.0.0.1:5000';
 
   List<Widget> _screens() {
     return [
       QuestionnaireScreen(
-        backendUrl: _backendUrl,
+        backendUrl: kBackendUrl,
         questionnaireId: _questionnaireId,
         onQuestionnaireStarted: (id) {
           setState(() {
@@ -30,7 +30,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
         },
       ),
       DashboardScreen(
-        backendUrl: _backendUrl,
+        backendUrl: kBackendUrl,
         questionnaireId: _questionnaireId,
       ),
       UploadScreen(
