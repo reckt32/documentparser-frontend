@@ -9,12 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-enum DocumentType {
-  bankStatement,
-  itr,
-  insurance,
-  mutualFundCAS,
-}
+enum DocumentType { bankStatement, itr, insurance, mutualFundCAS }
 
 String documentTypeToString(DocumentType type) {
   switch (type) {
@@ -34,12 +29,14 @@ class UploadDocument {
   final Uint8List? fileBytes; // For web
   final File? file; // For non-web
   DocumentType? type;
+  String? displayName; // user-provided name
 
   UploadDocument({
     required this.fileName,
     this.fileBytes,
     this.file,
     this.type,
+    this.displayName,
   });
 }
 
@@ -83,35 +80,50 @@ class _UploadScreenState extends State<UploadScreen> {
         }
       } else {
         File file = File(result.files.single.path!);
-        _showTypeDialog(
-          UploadDocument(fileName: fileName, file: file),
-        );
+        _showTypeDialog(UploadDocument(fileName: fileName, file: file));
       }
     }
   }
 
   void _showTypeDialog(UploadDocument doc) async {
     DocumentType? selectedType;
+    final nameCtrl = TextEditingController(text: doc.fileName);
     await showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Select Document Type'),
-          content: DropdownButtonFormField<DocumentType>(
-            value: selectedType,
-            items: DocumentType.values
-                .map((type) => DropdownMenuItem(
-                      value: type,
-                      child: Text(documentTypeToString(type)),
-                    ))
-                .toList(),
-            onChanged: (type) {
-              selectedType = type;
-            },
-            decoration: const InputDecoration(
-              labelText: 'Document Type',
-              border: OutlineInputBorder(),
-            ),
+          title: const Text('Add Document Details'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<DocumentType>(
+                value: selectedType,
+                items: DocumentType.values
+                    .map(
+                      (type) => DropdownMenuItem(
+                        value: type,
+                        child: Text(documentTypeToString(type)),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (type) {
+                  selectedType = type;
+                },
+                decoration: const InputDecoration(
+                  labelText: 'Document Type',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Document Name',
+                  hintText: 'e.g., HDFC Jan 2025 Statement',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -130,6 +142,7 @@ class _UploadScreenState extends State<UploadScreen> {
                         fileBytes: doc.fileBytes,
                         file: doc.file,
                         type: selectedType,
+                        displayName: nameCtrl.text.trim().isEmpty ? doc.fileName : nameCtrl.text.trim(),
                       ),
                     );
                   });
@@ -240,7 +253,10 @@ class _UploadScreenState extends State<UploadScreen> {
 
     try {
       if (kIsWeb) {
-        await launchUrl(Uri.parse(_downloadUrl!), mode: LaunchMode.externalApplication);
+        await launchUrl(
+          Uri.parse(_downloadUrl!),
+          mode: LaunchMode.externalApplication,
+        );
         setState(() {
           _message = 'PDF download initiated in browser.';
         });
@@ -295,18 +311,14 @@ class _UploadScreenState extends State<UploadScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
-                Icons.upload_file,
-                size: 80,
-                color: Colors.deepPurple,
-              ),
+              const Icon(Icons.upload_file, size: 80, color: Colors.deepPurple),
               const SizedBox(height: 20),
               Text(
                 'Upload Multiple Financial Documents',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.deepPurple,
-                    ),
+                  fontWeight: FontWeight.bold,
+                  color: Colors.deepPurple,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 10),
@@ -344,8 +356,11 @@ class _UploadScreenState extends State<UploadScreen> {
                     return Card(
                       margin: const EdgeInsets.symmetric(vertical: 8),
                       child: ListTile(
-                        leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
-                        title: Text(doc.fileName),
+                        leading: const Icon(
+                          Icons.picture_as_pdf,
+                          color: Colors.red,
+                        ),
+                        title: Text(doc.displayName ?? doc.fileName),
                         subtitle: Text(
                           doc.type != null
                               ? documentTypeToString(doc.type!)
@@ -356,7 +371,8 @@ class _UploadScreenState extends State<UploadScreen> {
                         ),
                         trailing: IconButton(
                           icon: const Icon(Icons.delete, color: Colors.grey),
-                          onPressed: _isLoading ? null : () => _removeDocument(index),
+                          onPressed:
+                              _isLoading ? null : () => _removeDocument(index),
                         ),
                       ),
                     );
@@ -367,7 +383,9 @@ class _UploadScreenState extends State<UploadScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 24.0),
                   child: Text(
                     'No documents added yet.',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.grey),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleMedium?.copyWith(color: Colors.grey),
                   ),
                 ),
               const SizedBox(height: 30),
@@ -415,8 +433,9 @@ class _UploadScreenState extends State<UploadScreen> {
                 Text(
                   _message,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: _message.contains('Error') ? Colors.red : Colors.green,
-                      ),
+                    color:
+                        _message.contains('Error') ? Colors.red : Colors.green,
+                  ),
                   textAlign: TextAlign.center,
                 ),
             ],

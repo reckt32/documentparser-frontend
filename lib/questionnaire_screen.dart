@@ -13,12 +13,14 @@ class QuestionnaireScreen extends StatefulWidget {
   final String backendUrl;
   final int? questionnaireId;
   final ValueChanged<int> onQuestionnaireStarted;
+  final VoidCallback? onCompleted;
 
   const QuestionnaireScreen({
     super.key,
     required this.backendUrl,
     required this.onQuestionnaireStarted,
     this.questionnaireId,
+    this.onCompleted,
   });
 
   @override
@@ -96,6 +98,8 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
     _qid = widget.questionnaireId;
     if (_qid != null) {
       _fetchQuestionnaire();
+    } else {
+      _startQuestionnaire(); // auto-start so the form appears immediately
     }
   }
 
@@ -138,14 +142,19 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   Future<void> _fetchQuestionnaire() async {
     if (_qid == null) return;
     try {
-      final resp = await http.get(Uri.parse('${widget.backendUrl}/questionnaire/${_qid}'));
+      final resp = await http.get(
+        Uri.parse('${widget.backendUrl}/questionnaire/${_qid}'),
+      );
       if (resp.statusCode == 200) {
         // Could hydrate fields if needed in future.
       }
     } catch (_) {}
   }
 
-  Future<void> _saveSection(String section, Map<String, dynamic> payload) async {
+  Future<void> _saveSection(
+    String section,
+    Map<String, dynamic> payload,
+  ) async {
     if (_qid == null) {
       setState(() {
         _statusMessage = 'Start questionnaire first.';
@@ -217,7 +226,8 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
     return _sectionCard(
       title: 'Family & Dependents',
       children: [
-        if (_maritalStatus == 'Married') _textField(_spouseNameCtrl, 'Spouse Name'),
+        if (_maritalStatus == 'Married')
+          _textField(_spouseNameCtrl, 'Spouse Name'),
         Row(
           children: [
             Expanded(
@@ -245,19 +255,30 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
         ),
         for (int i = 0; i < _childrenCtrls.length; i++)
           _inlineRow([
-            Expanded(child: _textField(_childrenCtrls[i]['name']!, 'Child ${i + 1} Name')),
+            Expanded(
+              child: _textField(
+                _childrenCtrls[i]['name']!,
+                'Child ${i + 1} Name',
+              ),
+            ),
             const SizedBox(width: 12),
-            Expanded(child: _textField(_childrenCtrls[i]['age']!, 'Age', keyboard: TextInputType.number)),
+            Expanded(
+              child: _textField(
+                _childrenCtrls[i]['age']!,
+                'Age',
+                keyboard: TextInputType.number,
+              ),
+            ),
           ]),
         SwitchListTile(
           title: const Text('Other Dependents?'),
-            value: _hasDependents,
-            onChanged: (v) {
-              setState(() {
-                _hasDependents = v;
-                if (!v) _dependentsCtrls.clear();
-              });
-            },
+          value: _hasDependents,
+          onChanged: (v) {
+            setState(() {
+              _hasDependents = v;
+              if (!v) _dependentsCtrls.clear();
+            });
+          },
         ),
         if (_hasDependents)
           Column(
@@ -275,9 +296,19 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
               ),
               for (int i = 0; i < _dependentsCtrls.length; i++)
                 _inlineRow([
-                  Expanded(child: _textField(_dependentsCtrls[i]['name']!, 'Dependent ${i + 1} Name')),
+                  Expanded(
+                    child: _textField(
+                      _dependentsCtrls[i]['name']!,
+                      'Dependent ${i + 1} Name',
+                    ),
+                  ),
                   const SizedBox(width: 12),
-                  Expanded(child: _textField(_dependentsCtrls[i]['relation']!, 'Relation')),
+                  Expanded(
+                    child: _textField(
+                      _dependentsCtrls[i]['relation']!,
+                      'Relation',
+                    ),
+                  ),
                   IconButton(
                     icon: const Icon(Icons.remove_circle_outline),
                     onPressed: () {
@@ -285,27 +316,36 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
                         _dependentsCtrls.removeAt(i);
                       });
                     },
-                  )
+                  ),
                 ]),
             ],
           ),
         _saveButton(() {
           _saveSection('family_info', {
-            'spouse': _maritalStatus == 'Married' ? _spouseNameCtrl.text.trim() : null,
-            'children': _childrenCtrls
-                .map((m) => {
-                      'name': m['name']!.text.trim(),
-                      'age': m['age']!.text.trim(),
-                    })
-                .toList(),
-            'dependents': _hasDependents
-                ? _dependentsCtrls
-                    .map((m) => {
-                          'name': m['name']!.text.trim(),
-                          'relation': m['relation']!.text.trim(),
-                        })
-                    .toList()
-                : [],
+            'spouse':
+                _maritalStatus == 'Married'
+                    ? _spouseNameCtrl.text.trim()
+                    : null,
+            'children':
+                _childrenCtrls
+                    .map(
+                      (m) => {
+                        'name': m['name']!.text.trim(),
+                        'age': m['age']!.text.trim(),
+                      },
+                    )
+                    .toList(),
+            'dependents':
+                _hasDependents
+                    ? _dependentsCtrls
+                        .map(
+                          (m) => {
+                            'name': m['name']!.text.trim(),
+                            'relation': m['relation']!.text.trim(),
+                          },
+                        )
+                        .toList()
+                    : [],
           });
         }),
       ],
@@ -343,16 +383,20 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
           ),
         _saveButton(() {
           _saveSection('goals', {
-            'items': _addGoals
-                ? _goalCtrls
-                    .map((g) => {
-                          'name': g['name']!.text.trim(),
-                          'target_amount': g['target_amount']!.text.trim(),
-                          'horizon_years': g['horizon_years']!.text.trim(),
-                          'suggested_strategy': g['suggested_strategy']!.text.trim(),
-                        })
-                    .toList()
-                : [],
+            'items':
+                _addGoals
+                    ? _goalCtrls
+                        .map(
+                          (g) => {
+                            'name': g['name']!.text.trim(),
+                            'target_amount': g['target_amount']!.text.trim(),
+                            'horizon_years': g['horizon_years']!.text.trim(),
+                            'suggested_strategy':
+                                g['suggested_strategy']!.text.trim(),
+                          },
+                        )
+                        .toList()
+                    : [],
           });
         }),
       ],
@@ -368,11 +412,26 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
           children: [
             _textField(ctrls['name']!, 'Goal ${i + 1} Name'),
             _inlineRow([
-              Expanded(child: _textField(ctrls['target_amount']!, 'Target (₹)', keyboard: TextInputType.number)),
+              Expanded(
+                child: _textField(
+                  ctrls['target_amount']!,
+                  'Target (₹)',
+                  keyboard: TextInputType.number,
+                ),
+              ),
               const SizedBox(width: 12),
-              Expanded(child: _textField(ctrls['horizon_years']!, 'Horizon (yrs)', keyboard: TextInputType.number)),
+              Expanded(
+                child: _textField(
+                  ctrls['horizon_years']!,
+                  'Horizon (yrs)',
+                  keyboard: TextInputType.number,
+                ),
+              ),
             ]),
-            _textField(ctrls['suggested_strategy']!, 'Suggested Strategy (optional)'),
+            _textField(
+              ctrls['suggested_strategy']!,
+              'Suggested Strategy (optional)',
+            ),
             Align(
               alignment: Alignment.centerRight,
               child: IconButton(
@@ -383,7 +442,7 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
                   });
                 },
               ),
-            )
+            ),
           ],
         ),
       ),
@@ -406,8 +465,16 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
           items: const ['Short', 'Medium', 'Long'],
           onChanged: (v) => setState(() => _primaryHorizon = v),
         ),
-        _textField(_primaryHorizonYearsCtrl, 'Primary Horizon (Years)', keyboard: TextInputType.number),
-        _textField(_lossToleranceCtrl, 'Max Short-Term Loss % You Can Tolerate', keyboard: TextInputType.number),
+        _textField(
+          _primaryHorizonYearsCtrl,
+          'Primary Horizon (Years)',
+          keyboard: TextInputType.number,
+        ),
+        _textField(
+          _lossToleranceCtrl,
+          'Max Short-Term Loss % You Can Tolerate',
+          keyboard: TextInputType.number,
+        ),
         _dropdown<String>(
           label: 'Goal Importance',
           value: _goalImportance,
@@ -429,11 +496,25 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
         _dropdown<String>(
           label: 'Income Stability',
           value: _incomeStability,
-          items: const ['Very Unstable', 'Unstable', 'Average', 'Stable', 'Very Stable'],
+          items: const [
+            'Very Unstable',
+            'Unstable',
+            'Average',
+            'Stable',
+            'Very Stable',
+          ],
           onChanged: (v) => setState(() => _incomeStability = v),
         ),
-        _textField(_emergencyFundMonthsCtrl, 'Emergency Fund (Months of Expenses)', keyboard: TextInputType.number),
-        _textField(_equityAllocationCtrl, 'Current Equity Allocation % (optional override)', keyboard: TextInputType.number),
+        _textField(
+          _emergencyFundMonthsCtrl,
+          'Emergency Fund (Months of Expenses)',
+          keyboard: TextInputType.number,
+        ),
+        _textField(
+          _equityAllocationCtrl,
+          'Current Equity Allocation % (optional override)',
+          keyboard: TextInputType.number,
+        ),
         _saveButton(() {
           if (_loading) return;
           String lt = _lossToleranceCtrl.text.trim();
@@ -446,7 +527,8 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
           double? ltVal = parseNum(lt);
           if (lt.isNotEmpty && (ltVal == null || ltVal < 0 || ltVal > 100)) {
             setState(() {
-              _statusMessage = 'Validation: Max Short-Term Loss % must be between 0 and 100.';
+              _statusMessage =
+                  'Validation: Max Short-Term Loss % must be between 0 and 100.';
             });
             return;
           }
@@ -454,15 +536,18 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
           double? phVal = parseNum(phY);
           if (phY.isNotEmpty && (phVal == null || phVal < 0 || phVal > 100)) {
             setState(() {
-              _statusMessage = 'Validation: Primary Horizon (Years) must be 0–100.';
+              _statusMessage =
+                  'Validation: Primary Horizon (Years) must be 0–100.';
             });
             return;
           }
 
           double? efmVal = parseNum(efm);
-          if (efm.isNotEmpty && (efmVal == null || efmVal < 0 || efmVal > 240)) {
+          if (efm.isNotEmpty &&
+              (efmVal == null || efmVal < 0 || efmVal > 240)) {
             setState(() {
-              _statusMessage = 'Validation: Emergency Fund Months must be 0–240.';
+              _statusMessage =
+                  'Validation: Emergency Fund Months must be 0–240.';
             });
             return;
           }
@@ -501,12 +586,23 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
           value: _hasInsuranceDocs,
           onChanged: (v) => setState(() => _hasInsuranceDocs = v),
         ),
-        if (!_hasInsuranceDocs) _textField(_lifeCoverCtrl, 'Life Cover (₹)', keyboard: TextInputType.number),
-        if (!_hasInsuranceDocs) _textField(_healthCoverCtrl, 'Health Cover (₹)', keyboard: TextInputType.number),
+        if (!_hasInsuranceDocs)
+          _textField(
+            _lifeCoverCtrl,
+            'Life Cover (₹)',
+            keyboard: TextInputType.number,
+          ),
+        if (!_hasInsuranceDocs)
+          _textField(
+            _healthCoverCtrl,
+            'Health Cover (₹)',
+            keyboard: TextInputType.number,
+          ),
         _saveButton(() {
           _saveSection('insurance', {
             'life_cover': _hasInsuranceDocs ? null : _lifeCoverCtrl.text.trim(),
-            'health_cover': _hasInsuranceDocs ? null : _healthCoverCtrl.text.trim(),
+            'health_cover':
+                _hasInsuranceDocs ? null : _healthCoverCtrl.text.trim(),
             'uploaded_docs': _hasInsuranceDocs,
           });
         }),
@@ -518,18 +614,39 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
     return _sectionCard(
       title: 'Lifestyle & Allocation',
       children: [
-        _textField(_annualIncomeCtrl, 'Annual Income (₹)', keyboard: TextInputType.number),
-        _textField(_monthlyExpensesCtrl, 'Monthly Expenses (₹)', keyboard: TextInputType.number),
-        _textField(_monthlyEmiCtrl, 'Monthly EMI (₹)', keyboard: TextInputType.number),
-        _textField(_emergencyFundCtrl, 'Emergency Fund (₹)', keyboard: TextInputType.number),
-        _textField(_savingsPercentCtrl, 'Savings % (if known)', keyboard: TextInputType.number),
+        _textField(
+          _annualIncomeCtrl,
+          'Annual Income (₹)',
+          keyboard: TextInputType.number,
+        ),
+        _textField(
+          _monthlyExpensesCtrl,
+          'Monthly Expenses (₹)',
+          keyboard: TextInputType.number,
+        ),
+        _textField(
+          _monthlyEmiCtrl,
+          'Monthly EMI (₹)',
+          keyboard: TextInputType.number,
+        ),
+        _textField(
+          _emergencyFundCtrl,
+          'Emergency Fund (₹)',
+          keyboard: TextInputType.number,
+        ),
+        _textField(
+          _savingsPercentCtrl,
+          'Savings % (if known)',
+          keyboard: TextInputType.number,
+        ),
         _dropdown<String>(
           label: 'Savings Band',
           value: _savingsBand.isEmpty ? 'Unknown' : _savingsBand,
           items: const ['Unknown', '<10%', '10-20%', '20-30%', '>30%'],
-          onChanged: (v) => setState(() {
-            _savingsBand = v == 'Unknown' ? '' : v;
-          }),
+          onChanged:
+              (v) => setState(() {
+                _savingsBand = v == 'Unknown' ? '' : v;
+              }),
         ),
         Wrap(
           spacing: 8,
@@ -552,12 +669,18 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
           ],
         ),
         const SizedBox(height: 12),
-        const Text('Allocation % (optional total 0-100)', style: TextStyle(fontWeight: FontWeight.bold)),
+        const Text(
+          'Allocation % (optional total 0-100)',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         _allocationRow('Equity', _allocationCtrls['equity']!),
         _allocationRow('Debt', _allocationCtrls['debt']!),
         _allocationRow('Gold', _allocationCtrls['gold']!),
         _allocationRow('Real Estate', _allocationCtrls['realEstate']!),
-        _allocationRow('Insurance Linked', _allocationCtrls['insuranceLinked']!),
+        _allocationRow(
+          'Insurance Linked',
+          _allocationCtrls['insuranceLinked']!,
+        ),
         _allocationRow('Cash', _allocationCtrls['cash']!),
         _saveButton(() {
           _saveSection('lifestyle', {
@@ -606,8 +729,14 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.deepPurple)),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.deepPurple,
+              ),
+            ),
             const SizedBox(height: 12),
             ...children,
           ],
@@ -616,8 +745,11 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
     );
   }
 
-  Widget _textField(TextEditingController c, String label,
-      {TextInputType keyboard = TextInputType.text}) {
+  Widget _textField(
+    TextEditingController c,
+    String label, {
+    TextInputType keyboard = TextInputType.text,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: TextField(
@@ -647,12 +779,15 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
         child: DropdownButtonHideUnderline(
           child: DropdownButton<T>(
             value: value,
-            items: items
-                .map((e) => DropdownMenuItem<T>(
-                      value: e,
-                      child: Text(e.toString()),
-                    ))
-                .toList(),
+            items:
+                items
+                    .map(
+                      (e) => DropdownMenuItem<T>(
+                        value: e,
+                        child: Text(e.toString()),
+                      ),
+                    )
+                    .toList(),
             onChanged: (v) {
               if (v != null) onChanged(v);
             },
@@ -744,38 +879,43 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
       ),
-      body: _qid == null
-          ? Center(
-              child: _loading
-                  ? const CircularProgressIndicator()
-                  : ElevatedButton.icon(
-                      icon: const Icon(Icons.play_arrow),
-                      label: const Text('Start Questionnaire'),
-                      onPressed: _startQuestionnaire,
+      body:
+          _qid == null
+              ? Center(
+                child:
+                    _loading
+                        ? const CircularProgressIndicator()
+                        : ElevatedButton.icon(
+                          icon: const Icon(Icons.play_arrow),
+                          label: const Text('Start Questionnaire'),
+                          onPressed: _startQuestionnaire,
+                        ),
+              )
+              : Column(
+                children: [
+                  _progressIndicator(steps.length),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: steps[_stepIndex],
                     ),
-            )
-          : Column(
-              children: [
-                _progressIndicator(steps.length),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: steps[_stepIndex],
                   ),
-                ),
-                _navigationBar(steps.length),
-                if (_statusMessage.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(
-                      _statusMessage,
-                      style: TextStyle(
-                        color: _statusMessage.contains('Error') ? Colors.red : Colors.green,
+                  _navigationBar(steps.length),
+                  if (_statusMessage.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Text(
+                        _statusMessage,
+                        style: TextStyle(
+                          color:
+                              _statusMessage.contains('Error')
+                                  ? Colors.red
+                                  : Colors.green,
+                        ),
                       ),
                     ),
-                  ),
-              ],
-            ),
+                ],
+              ),
     );
   }
 
@@ -797,29 +937,34 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
         children: [
           if (_stepIndex > 0)
             ElevatedButton(
-              onPressed: _loading
-                  ? null
-                  : () {
-                      setState(() {
-                        _stepIndex--;
-                      });
-                    },
+              onPressed:
+                  _loading
+                      ? null
+                      : () {
+                        setState(() {
+                          _stepIndex--;
+                        });
+                      },
               child: const Text('Back'),
             ),
           const Spacer(),
           Text('Step ${_stepIndex + 1} / $total'),
           const Spacer(),
           ElevatedButton(
-            onPressed: _loading
-                ? null
-                : () {
-                    setState(() {
+            onPressed:
+                _loading
+                    ? null
+                    : () {
                       if (_stepIndex < total - 1) {
-                        _stepIndex++;
+                        setState(() {
+                          _stepIndex++;
+                        });
+                      } else {
+                        // Final step: submit and continue to upload flow
+                        widget.onCompleted?.call();
                       }
-                    });
-                  },
-            child: Text(_stepIndex == total - 1 ? 'End' : 'Next'),
+                    },
+            child: Text(_stepIndex == total - 1 ? 'Submit & Continue' : 'Next'),
           ),
         ],
       ),
