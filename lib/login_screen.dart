@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:frontend/constants.dart';
 
 class LoginScreen extends StatefulWidget {
   final VoidCallback onLoginSuccess;
@@ -17,8 +18,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   String _errorMessage = '';
 
-  final String _backendUrl = 'http://127.0.0.1:5000'; // Replace with your backend URL
-
   Future<void> _login() async {
     setState(() {
       _isLoading = true;
@@ -27,7 +26,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('$_backendUrl/login'),
+        Uri.parse('$kBackendUrl/login'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'username': _usernameController.text,

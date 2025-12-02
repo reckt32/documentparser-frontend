@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/upload_screen.dart';
 import 'package:frontend/questionnaire_screen.dart';
+import 'package:frontend/constants.dart';
 import 'package:frontend/home_screen.dart';
 
 class MainAppScreen extends StatefulWidget {
@@ -15,7 +16,6 @@ class MainAppScreen extends StatefulWidget {
 class _MainAppScreenState extends State<MainAppScreen> {
   int _selectedIndex = 0; // 0: Home, 1: Questionnaire, 2: Doc Upload
   int? _questionnaireId;
-  final String _backendUrl = 'http://127.0.0.1:5000';
 
   List<Widget> _screens() {
     return [
@@ -27,7 +27,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
         },
       ),
       QuestionnaireScreen(
-        backendUrl: _backendUrl,
+        backendUrl: kBackendUrl,
         questionnaireId: _questionnaireId,
         onQuestionnaireStarted: (id) {
           setState(() {
