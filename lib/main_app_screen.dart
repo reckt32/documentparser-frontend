@@ -14,35 +14,43 @@ class MainAppScreen extends StatefulWidget {
 }
 
 class _MainAppScreenState extends State<MainAppScreen> {
-  int _selectedIndex = 0; // 0: Home, 1: Questionnaire, 2: Doc Upload
+  // Flow: 0: Home, 1: Doc Upload, 2: Questionnaire
+  int _selectedIndex = 0;
   int? _questionnaireId;
+  Map<String, dynamic>? _prefillData; // from backend analysis/docInsights
 
   List<Widget> _screens() {
     return [
       HomeScreen(
         onStart: () {
           setState(() {
-            _selectedIndex = 1; // go to Questionnaire
+            _selectedIndex = 1; // go to Upload first
+          });
+        },
+      ),
+      UploadScreen(
+        questionnaireId: _questionnaireId,
+        // After successful upload (with qid), move to questionnaire with prefill
+        onUploaded: (int? qid, Map<String, dynamic>? prefill) {
+          setState(() {
+            _questionnaireId = qid ?? _questionnaireId;
+            _prefillData = prefill;
+            _selectedIndex = 2;
           });
         },
       ),
       QuestionnaireScreen(
         backendUrl: kBackendUrl,
         questionnaireId: _questionnaireId,
+        prefillData: _prefillData,
         onQuestionnaireStarted: (id) {
           setState(() {
             _questionnaireId = id;
-            // stay on questionnaire; no dashboard
           });
         },
         onCompleted: () {
-          setState(() {
-            _selectedIndex = 2; // proceed to upload after submit
-          });
+          // stay on questionnaire after submit
         },
-      ),
-      UploadScreen(
-        questionnaireId: _questionnaireId,
       ),
     ];
   }
@@ -99,8 +107,8 @@ class _MainAppScreenState extends State<MainAppScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.assignment),
-              title: const Text('Questionnaire'),
+              leading: const Icon(Icons.upload_file),
+              title: const Text('Doc Upload'),
               selected: _selectedIndex == 1,
               onTap: () {
                 _onItemTapped(1);
@@ -108,8 +116,8 @@ class _MainAppScreenState extends State<MainAppScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.upload_file),
-              title: const Text('Doc Upload'),
+              leading: const Icon(Icons.assignment),
+              title: const Text('Questionnaire'),
               selected: _selectedIndex == 2,
               onTap: () {
                 _onItemTapped(2);

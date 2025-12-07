@@ -30,7 +30,7 @@ class HomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Start your financial questionnaire to proceed to document upload.',
+                'Upload your financial documents first. We will prefill the questionnaire using extracted data; you can edit if needed.',
                 style: Theme.of(context).textTheme.titleMedium,
                 textAlign: TextAlign.center,
               ),

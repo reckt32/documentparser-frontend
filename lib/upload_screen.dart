@@ -43,7 +43,8 @@ class UploadDocument {
 
 class UploadScreen extends StatefulWidget {
   final int? questionnaireId;
-  const UploadScreen({Key? key, this.questionnaireId}) : super(key: key);
+  final void Function(int? questionnaireId, Map<String, dynamic>? prefill)? onUploaded;
+  const UploadScreen({Key? key, this.questionnaireId, this.onUploaded}) : super(key: key);
 
   @override
   State<UploadScreen> createState() => _UploadScreenState();
@@ -98,14 +99,15 @@ class _UploadScreenState extends State<UploadScreen> {
             children: [
               DropdownButtonFormField<DocumentType>(
                 value: selectedType,
-                items: DocumentType.values
-                    .map(
-                      (type) => DropdownMenuItem(
-                        value: type,
-                        child: Text(documentTypeToString(type)),
-                      ),
-                    )
-                    .toList(),
+                items:
+                    DocumentType.values
+                        .map(
+                          (type) => DropdownMenuItem(
+                            value: type,
+                            child: Text(documentTypeToString(type)),
+                          ),
+                        )
+                        .toList(),
                 onChanged: (type) {
                   selectedType = type;
                 },
@@ -142,7 +144,10 @@ class _UploadScreenState extends State<UploadScreen> {
                         fileBytes: doc.fileBytes,
                         file: doc.file,
                         type: selectedType,
-                        displayName: nameCtrl.text.trim().isEmpty ? doc.fileName : nameCtrl.text.trim(),
+                        displayName:
+                            nameCtrl.text.trim().isEmpty
+                                ? doc.fileName
+                                : nameCtrl.text.trim(),
                       ),
                     );
                   });
@@ -218,10 +223,23 @@ class _UploadScreenState extends State<UploadScreen> {
       if (response.statusCode == 200) {
         final responseBody = await response.stream.bytesToString();
         final data = jsonDecode(responseBody);
+        // Try to forward prefill to questionnaire if available (when questionnaireId was attached)
+        final int? returnedQid = (data['questionnaire_id'] is int) ? data['questionnaire_id'] as int : _questionnaireId;
+        final Map<String, dynamic>? prefill = {
+          // Pass along analysis/docInsights if present to prefill later
+          if (data['analysis'] != null) 'analysis': data['analysis'],
+          if (data['docInsights'] != null) 'docInsights': data['docInsights'],
+        };
+        // Update local UI state
         setState(() {
           _downloadUrl = data['summary_pdf_url'];
           _message = 'Documents uploaded successfully. PDF ready for download.';
+          _questionnaireId = returnedQid ?? _questionnaireId;
         });
+        // Notify parent to navigate to Questionnaire with prefill
+        if (widget.onUploaded != null) {
+          widget.onUploaded!(returnedQid, prefill);
+        }
       } else {
         final errorBody = await response.stream.bytesToString();
         setState(() {
@@ -300,11 +318,13 @@ class _UploadScreenState extends State<UploadScreen> {
         } else if (response.statusCode == 404) {
           setState(() {
             _downloadUrl = null;
-            _message = 'PDF no longer available. Please upload documents again to generate a new PDF.';
+            _message =
+                'PDF no longer available. Please upload documents again to generate a new PDF.';
           });
         } else {
           setState(() {
-            _message = 'Failed to download PDF: ${response.statusCode}, ${response.reasonPhrase}';
+            _message =
+                'Failed to download PDF: ${response.statusCode}, ${response.reasonPhrase}';
           });
         }
       }
@@ -443,8 +463,16 @@ class _UploadScreenState extends State<UploadScreen> {
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: _downloadPdf,
-                    icon: Icon(_cachedPdfPath != null ? Icons.open_in_new : Icons.download),
-                    label: Text(_cachedPdfPath != null ? 'Open Summary PDF' : 'Download Summary PDF'),
+                    icon: Icon(
+                      _cachedPdfPath != null
+                          ? Icons.open_in_new
+                          : Icons.download,
+                    ),
+                    label: Text(
+                      _cachedPdfPath != null
+                          ? 'Open Summary PDF'
+                          : 'Download Summary PDF',
+                    ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.deepPurple,
                       foregroundColor: Colors.white,

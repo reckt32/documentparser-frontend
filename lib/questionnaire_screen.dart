@@ -14,6 +14,7 @@ class QuestionnaireScreen extends StatefulWidget {
   final int? questionnaireId;
   final ValueChanged<int> onQuestionnaireStarted;
   final VoidCallback? onCompleted;
+  final Map<String, dynamic>? prefillData;
 
   const QuestionnaireScreen({
     super.key,
@@ -21,6 +22,7 @@ class QuestionnaireScreen extends StatefulWidget {
     required this.onQuestionnaireStarted,
     this.questionnaireId,
     this.onCompleted,
+    this.prefillData,
   });
 
   @override
@@ -96,6 +98,8 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   void initState() {
     super.initState();
     _qid = widget.questionnaireId;
+    // Apply prefill values from uploaded document insights, if any
+    _applyPrefill(widget.prefillData);
     if (_qid != null) {
       _fetchQuestionnaire();
     } else {
@@ -136,6 +140,111 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
       setState(() {
         _loading = false;
       });
+    }
+  }
+
+  void _applyPrefill(Map<String, dynamic>? prefill) {
+    if (prefill == null) return;
+    try {
+      final di = (prefill['docInsights'] ?? prefill['docinsights']) as Map<String, dynamic>? ?? {};
+      final bank = (di['bank'] ?? {}) as Map<String, dynamic>;
+      final portfolio = (di['portfolio'] ?? {}) as Map<String, dynamic>;
+      final analysis = (prefill['analysis'] ?? {}) as Map<String, dynamic>;
+
+      // Lifestyle prefill from bank totals
+      final inflow = bank['total_inflows'];
+      final outflow = bank['total_outflows'];
+      final netcf = bank['net_cashflow'];
+
+      String _fmtNum(dynamic v) {
+        if (v == null) return '';
+        if (v is num) return v.toString();
+        return v.toString();
+      }
+
+      // Annual income ≈ total inflows
+      if (_annualIncomeCtrl.text.trim().isEmpty && inflow != null) {
+        _annualIncomeCtrl.text = _fmtNum(inflow);
+      }
+      // Monthly expenses ≈ total outflows / 12
+      if (_monthlyExpensesCtrl.text.trim().isEmpty && outflow != null) {
+        try {
+          if (outflow is num) {
+            _monthlyExpensesCtrl.text = (outflow / 12.0).toStringAsFixed(2);
+          } else {
+            final parsed = double.tryParse(outflow.toString().replaceAll(',', ''));
+            if (parsed != null) {
+              _monthlyExpensesCtrl.text = (parsed / 12.0).toStringAsFixed(2);
+            }
+          }
+        } catch (_) {}
+      }
+      // Savings % ≈ max(0, net cf / inflow * 100)
+      if (_savingsPercentCtrl.text.trim().isEmpty && inflow != null && netcf != null) {
+        try {
+          final inflowNum = (inflow is num) ? inflow.toDouble() : double.tryParse(inflow.toString().replaceAll(',', '')) ?? 0.0;
+          final netNum = (netcf is num) ? netcf.toDouble() : double.tryParse(netcf.toString().replaceAll(',', '')) ?? 0.0;
+          if (inflowNum > 0) {
+            final sp = (netNum / inflowNum) * 100.0;
+            _savingsPercentCtrl.text = sp.isFinite ? sp.toStringAsFixed(2) : '';
+          }
+        } catch (_) {}
+      }
+
+      // Insurance prefill (sum assured or insured)
+      final insFromAnalysis = (analysis['insurance'] ?? {}) as Map<String, dynamic>;
+      if (_lifeCoverCtrl.text.trim().isEmpty) {
+        final lc = insFromAnalysis['lifeCover'];
+        if (lc != null) _lifeCoverCtrl.text = _fmtNum(lc);
+      }
+      if (_healthCoverCtrl.text.trim().isEmpty) {
+        final hc = insFromAnalysis['healthCover'];
+        if (hc != null) _healthCoverCtrl.text = _fmtNum(hc);
+      }
+
+      // Allocation prefill from portfolio or analysis recommended bands (best-effort)
+      final alloc = (portfolio['allocation'] ?? {}) as Map<String, dynamic>;
+      void setAlloc(String key, TextEditingController c) {
+        final v = alloc[key];
+        if (c.text.trim().isEmpty && v != null) c.text = _fmtNum(v);
+      }
+      setAlloc('equity', _allocationCtrls['equity']!);
+      setAlloc('debt', _allocationCtrls['debt']!);
+      setAlloc('gold', _allocationCtrls['gold']!);
+      setAlloc('realEstate', _allocationCtrls['realEstate']!);
+      setAlloc('insuranceLinked', _allocationCtrls['insuranceLinked']!);
+      setAlloc('cash', _allocationCtrls['cash']!);
+
+      // Basic risk hints from analysis
+      final adv = (analysis['advancedRisk'] ?? {}) as Map<String, dynamic>;
+      if (_equityAllocationCtrl.text.trim().isEmpty) {
+        final mid = adv['recommendedEquityMid'];
+        if (mid != null) {
+          _equityAllocationCtrl.text = _fmtNum(mid);
+        }
+      }
+
+      // Optionally mark savings band based on savings percent
+      if (_savingsBand.isEmpty && _savingsPercentCtrl.text.isNotEmpty) {
+        try {
+          final sp = double.tryParse(_savingsPercentCtrl.text) ?? 0.0;
+          if (sp < 10) _savingsBand = '<10%';
+          else if (sp < 20) _savingsBand = '10-20%';
+          else if (sp < 30) _savingsBand = '20-30%';
+          else _savingsBand = '>30%';
+        } catch (_) {}
+      }
+
+      // PAN/name prefill from ITR or CAS if present in analysis/docInsights (best-effort)
+      final personalFromAnalysis = (analysis['personal'] ?? {}) as Map<String, dynamic>;
+      if (_nameCtrl.text.trim().isEmpty && personalFromAnalysis['name'] != null) {
+        _nameCtrl.text = personalFromAnalysis['name'].toString();
+      }
+      if (_panCtrl.text.trim().isEmpty && personalFromAnalysis['pan'] != null) {
+        _panCtrl.text = personalFromAnalysis['pan'].toString();
+      }
+    } catch (_) {
+      // silent best-effort
     }
   }
 
