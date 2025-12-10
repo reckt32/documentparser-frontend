@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:frontend/constants.dart';
+import 'package:frontend/app_theme.dart';
 
 class LoginScreen extends StatefulWidget {
   final VoidCallback onLoginSuccess;
@@ -64,87 +65,222 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final isWideScreen = size.width > 800;
+
     return Scaffold(
-      body: Center(
+      body: isWideScreen
+          ? Row(
+              children: [
+                // Left branding panel
+                Expanded(
+                  flex: 5,
+                  child: _buildBrandingPanel(),
+                ),
+                // Right login form
+                Expanded(
+                  flex: 5,
+                  child: _buildLoginForm(context),
+                ),
+              ],
+            )
+          : _buildLoginForm(context),
+    );
+  }
+
+  Widget _buildBrandingPanel() {
+    return Container(
+      color: AppTheme.primaryNavy,
+      padding: const EdgeInsets.all(60),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Gold accent bar
+          AppTheme.goldAccentBar(width: 80, height: 3),
+          const SizedBox(height: 40),
+          // Split typography - "Financial Intelligence"
+          Text(
+            'Financial',
+            style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                  color: Colors.white,
+                  height: 0.9,
+                ),
+          ),
+          Text(
+            'Intelligence',
+            style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                  color: AppTheme.accentGold,
+                  height: 0.9,
+                ),
+          ),
+          const SizedBox(height: 32),
+          Text(
+            'Parse, analyze, and optimize your financial documents with precision and clarity.',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  fontSize: 16,
+                  height: 1.6,
+                ),
+          ),
+          const SizedBox(height: 60),
+          // Feature points with gold accent
+          _buildFeaturePoint('Document analysis powered by advanced technology'),
+          const SizedBox(height: 16),
+          _buildFeaturePoint('Automated financial insights and recommendations'),
+          const SizedBox(height: 16),
+          _buildFeaturePoint('Secure, professional-grade data handling'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeaturePoint(String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          margin: const EdgeInsets.only(top: 8),
+          decoration: const BoxDecoration(
+            color: AppTheme.accentGold,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.85),
+                  height: 1.6,
+                ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLoginForm(BuildContext context) {
+    return Container(
+      color: AppTheme.backgroundCream,
+      child: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.lock,
-                size: 100,
-                color: Colors.deepPurple,
-              ),
-              const SizedBox(height: 30),
-              Text(
-                'Welcome Back!',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.deepPurple,
-                    ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Login to your account to continue',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 40),
-              TextFormField(
-                controller: _usernameController,
-                decoration: InputDecoration(
-                  labelText: 'Username',
-                  hintText: 'Enter your username',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10.0),
-                  ),
-                  prefixIcon: const Icon(Icons.person),
+          padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 40),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Title
+                Text(
+                  'Welcome Back',
+                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                        color: AppTheme.primaryNavy,
+                      ),
                 ),
-                keyboardType: TextInputType.text,
-              ),
-              const SizedBox(height: 20.0),
-              TextFormField(
-                controller: _passwordController,
-                decoration: InputDecoration(
-                  labelText: 'Password',
-                  hintText: 'Enter your password',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10.0),
-                  ),
-                  prefixIcon: const Icon(Icons.lock),
+                const SizedBox(height: 8),
+                AppTheme.goldAccentBar(width: 60, height: 2),
+                const SizedBox(height: 16),
+                Text(
+                  'Login to your account to continue',
+                  style: Theme.of(context).textTheme.bodyLarge,
                 ),
-                obscureText: true,
-              ),
-              const SizedBox(height: 30.0),
-              if (_errorMessage.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 20.0),
-                  child: Text(
-                    _errorMessage,
-                    style: const TextStyle(color: Colors.red, fontSize: 16),
-                  ),
+                const SizedBox(height: 48),
+
+                // Username field
+                Text(
+                  'USERNAME',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AppTheme.textDark,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.0,
+                      ),
                 ),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _login,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10.0),
-                    ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _usernameController,
+                  decoration: const InputDecoration(
+                    hintText: 'Enter your username',
                   ),
-                  child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text(
-                          'Login',
-                          style: TextStyle(fontSize: 18),
+                  keyboardType: TextInputType.text,
+                ),
+                const SizedBox(height: 24),
+
+                // Password field
+                Text(
+                  'PASSWORD',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AppTheme.textDark,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.0,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _passwordController,
+                  decoration: const InputDecoration(
+                    hintText: 'Enter your password',
+                  ),
+                  obscureText: true,
+                ),
+                const SizedBox(height: 32),
+
+                // Error message
+                if (_errorMessage.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    margin: const EdgeInsets.only(bottom: 24),
+                    decoration: BoxDecoration(
+                      color: AppTheme.errorRed.withValues(alpha: 0.1),
+                      border: Border(
+                        left: BorderSide(
+                          color: AppTheme.errorRed,
+                          width: 3,
                         ),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          color: AppTheme.errorRed,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _errorMessage,
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: AppTheme.errorRed,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                // Login button
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _login,
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text('Login'),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

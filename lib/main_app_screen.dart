@@ -3,6 +3,7 @@ import 'package:frontend/upload_screen.dart';
 import 'package:frontend/questionnaire_screen.dart';
 import 'package:frontend/constants.dart';
 import 'package:frontend/home_screen.dart';
+import 'package:frontend/app_theme.dart';
 
 class MainAppScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -64,79 +65,171 @@ class _MainAppScreenState extends State<MainAppScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppTheme.backgroundCream,
       appBar: AppBar(
-        title: const Text('Document Parser'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
+        title: Row(
+          children: [
+            Text(
+              'Document',
+              style: Theme.of(context).appBarTheme.titleTextStyle,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'Parser',
+              style: Theme.of(context).appBarTheme.titleTextStyle?.copyWith(
+                color: AppTheme.accentGold,
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: AppTheme.primaryNavy,
         foregroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
+        backgroundColor: Colors.white,
+        child: Column(
           children: <Widget>[
-            DrawerHeader(
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary,
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(32),
+              decoration: const BoxDecoration(
+                color: AppTheme.primaryNavy,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: SafeArea(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color: AppTheme.accentGold,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                      child: const Icon(
+                        Icons.person,
+                        size: 32,
+                        color: AppTheme.primaryNavy,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'User Name',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'user@example.com',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.8),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 16),
                 children: [
-                  const CircleAvatar(
-                    radius: 30,
-                    backgroundColor: Colors.white,
-                    child: Icon(Icons.person, size: 40, color: Colors.deepPurple),
+                  _buildDrawerItem(
+                    context,
+                    icon: Icons.home_outlined,
+                    title: 'Home',
+                    isSelected: _selectedIndex == 0,
+                    onTap: () {
+                      _onItemTapped(0);
+                      Navigator.pop(context);
+                    },
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'User Name', // Placeholder for user name
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white),
+                  _buildDrawerItem(
+                    context,
+                    icon: Icons.upload_file_outlined,
+                    title: 'Doc Upload',
+                    isSelected: _selectedIndex == 1,
+                    onTap: () {
+                      _onItemTapped(1);
+                      Navigator.pop(context);
+                    },
                   ),
-                  Text(
-                    'user@example.com', // Placeholder for user email
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                  _buildDrawerItem(
+                    context,
+                    icon: Icons.assignment_outlined,
+                    title: 'Questionnaire',
+                    isSelected: _selectedIndex == 2,
+                    onTap: () {
+                      _onItemTapped(2);
+                      Navigator.pop(context);
+                    },
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Divider(
+                      color: AppTheme.borderLight.withValues(alpha: 0.3),
+                      height: 1,
+                    ),
+                  ),
+                  _buildDrawerItem(
+                    context,
+                    icon: Icons.logout_outlined,
+                    title: 'Logout',
+                    isSelected: false,
+                    onTap: () {
+                      Navigator.pop(context);
+                      widget.onLogout();
+                    },
                   ),
                 ],
               ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.home),
-              title: const Text('Home'),
-              selected: _selectedIndex == 0,
-              onTap: () {
-                _onItemTapped(0);
-                Navigator.pop(context); // Close the drawer
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.upload_file),
-              title: const Text('Doc Upload'),
-              selected: _selectedIndex == 1,
-              onTap: () {
-                _onItemTapped(1);
-                Navigator.pop(context); // Close the drawer
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.assignment),
-              title: const Text('Questionnaire'),
-              selected: _selectedIndex == 2,
-              onTap: () {
-                _onItemTapped(2);
-                Navigator.pop(context); // Close the drawer
-              },
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.logout),
-              title: const Text('Logout'),
-              onTap: () {
-                Navigator.pop(context); // Close the drawer
-                widget.onLogout(); // Call the logout callback
-              },
             ),
           ],
         ),
       ),
       body: _screens()[_selectedIndex],
+    );
+  }
+
+  Widget _buildDrawerItem(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(
+            color: isSelected ? AppTheme.accentGold : Colors.transparent,
+            width: 3,
+          ),
+        ),
+      ),
+      child: ListTile(
+        leading: Icon(
+          icon,
+          color: isSelected ? AppTheme.primaryNavy : AppTheme.textMedium,
+          size: 22,
+        ),
+        title: Text(
+          title,
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            color: isSelected ? AppTheme.primaryNavy : AppTheme.textMedium,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+        selected: isSelected,
+        selectedTileColor: AppTheme.accentGold.withValues(alpha: 0.08),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(2),
+        ),
+        onTap: onTap,
+      ),
     );
   }
 }

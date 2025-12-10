@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:frontend/constants.dart';
+import 'package:frontend/app_theme.dart';
 
 enum DocumentType { bankStatement, itr, insurance, mutualFundCAS }
 
@@ -348,155 +349,301 @@ class _UploadScreenState extends State<UploadScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Multi-Document Uploader'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Colors.white,
+      backgroundColor: AppTheme.backgroundCream,
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header section
+            _buildHeader(context),
+            // Content section
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 40),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_documents.isEmpty) _buildEmptyState(context),
+                  if (_documents.isNotEmpty) _buildDocumentList(context),
+                  const SizedBox(height: 32),
+                  _buildActionButtons(context),
+                  if (_message.isNotEmpty) ...[
+                    const SizedBox(height: 24),
+                    _buildStatusMessage(context),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.upload_file, size: 80, color: Colors.deepPurple),
-              const SizedBox(height: 20),
-              Text(
-                'Upload Multiple Financial Documents',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.deepPurple,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Select and categorize each document before submitting all together.',
-                style: Theme.of(context).textTheme.titleMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 30),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _isLoading ? null : _pickFile,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Document'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blueAccent,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10.0),
-                    ),
-                    textStyle: const TextStyle(fontSize: 18),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              if (_documents.isNotEmpty)
-                ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _documents.length,
-                  itemBuilder: (context, index) {
-                    final doc = _documents[index];
-                    return Card(
-                      margin: const EdgeInsets.symmetric(vertical: 8),
-                      child: ListTile(
-                        leading: const Icon(
-                          Icons.picture_as_pdf,
-                          color: Colors.red,
-                        ),
-                        title: Text(doc.displayName ?? doc.fileName),
-                        subtitle: Text(
-                          doc.type != null
-                              ? documentTypeToString(doc.type!)
-                              : 'No type selected',
-                          style: TextStyle(
-                            color: doc.type != null ? Colors.black : Colors.red,
-                          ),
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.grey),
-                          onPressed:
-                              _isLoading ? null : () => _removeDocument(index),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              if (_documents.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24.0),
-                  child: Text(
-                    'No documents added yet.',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleMedium?.copyWith(color: Colors.grey),
-                  ),
-                ),
-              const SizedBox(height: 30),
-              if (_isLoading)
-                const CircularProgressIndicator()
-              else
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _documents.isNotEmpty ? _submitAll : null,
-                    icon: const Icon(Icons.cloud_upload),
-                    label: const Text('Submit All Documents'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10.0),
-                      ),
-                      textStyle: const TextStyle(fontSize: 18),
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 20),
-              if (_downloadUrl != null)
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _downloadPdf,
-                    icon: Icon(
-                      _cachedPdfPath != null
-                          ? Icons.open_in_new
-                          : Icons.download,
-                    ),
-                    label: Text(
-                      _cachedPdfPath != null
-                          ? 'Open Summary PDF'
-                          : 'Download Summary PDF',
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.deepPurple,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10.0),
-                      ),
-                      textStyle: const TextStyle(fontSize: 18),
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 20),
-              if (_message.isNotEmpty)
-                Text(
-                  _message,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color:
-                        _message.contains('Error') ? Colors.red : Colors.green,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-            ],
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(
+            color: AppTheme.borderLight.withValues(alpha: 0.3),
+            width: 1,
           ),
         ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'DOCUMENT UPLOAD',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: AppTheme.accentGold,
+                  letterSpacing: 2.0,
+                ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Upload Financial Documents',
+            style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                  color: AppTheme.primaryNavy,
+                ),
+          ),
+          const SizedBox(height: 8),
+          AppTheme.goldAccentBar(width: 80, height: 2),
+          const SizedBox(height: 16),
+          Text(
+            'Select and categorize each document before submitting all together.',
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(60),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(
+          color: AppTheme.borderLight.withValues(alpha: 0.3),
+          width: 1,
+        ),
+        borderRadius: BorderRadius.circular(2),
+      ),
+      child: Column(
+        children: [
+          // Outlined icon box
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: AppTheme.accentGold,
+                width: 2,
+              ),
+              borderRadius: BorderRadius.circular(2),
+            ),
+            child: Icon(
+              Icons.upload_file_outlined,
+              size: 48,
+              color: AppTheme.accentGold,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'No documents added yet',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: AppTheme.primaryNavy,
+                ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Click the button below to add financial documents',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppTheme.textLight,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDocumentList(BuildContext context) {
+    return Column(
+      children: [
+        for (int index = 0; index < _documents.length; index++)
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(
+                color: AppTheme.borderLight.withValues(alpha: 0.3),
+                width: 1,
+              ),
+              borderRadius: BorderRadius.circular(2),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: AppTheme.errorRed.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                  child: const Icon(
+                    Icons.picture_as_pdf,
+                    color: AppTheme.errorRed,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _documents[index].displayName ?? _documents[index].fileName,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              color: AppTheme.primaryNavy,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _documents[index].type != null
+                            ? documentTypeToString(_documents[index].type!)
+                            : 'No type selected',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: _documents[index].type != null
+                                  ? AppTheme.textLight
+                                  : AppTheme.errorRed,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  color: AppTheme.textLight,
+                  onPressed: _isLoading ? null : () => _removeDocument(index),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildActionButtons(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 52,
+          child: ElevatedButton.icon(
+            onPressed: _isLoading ? null : _pickFile,
+            icon: const Icon(Icons.add, size: 20),
+            label: const Text('Add Document'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: AppTheme.primaryNavy,
+              side: BorderSide(
+                color: AppTheme.borderLight.withValues(alpha: 0.5),
+                width: 1,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        if (_isLoading)
+          Container(
+            height: 52,
+            decoration: BoxDecoration(
+              color: AppTheme.primaryNavy.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(2),
+            ),
+            child: const Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              ),
+            ),
+          )
+        else
+          SizedBox(
+            height: 52,
+            child: ElevatedButton.icon(
+              onPressed: _documents.isNotEmpty ? _submitAll : null,
+              icon: const Icon(Icons.cloud_upload, size: 20),
+              label: const Text('Submit All Documents'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryNavy,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ),
+        if (_downloadUrl != null) ...[
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 52,
+            child: ElevatedButton.icon(
+              onPressed: _downloadPdf,
+              icon: Icon(
+                _cachedPdfPath != null ? Icons.open_in_new : Icons.download,
+                size: 20,
+              ),
+              label: Text(
+                _cachedPdfPath != null ? 'Open Summary PDF' : 'Download Summary PDF',
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.accentGold,
+                foregroundColor: AppTheme.primaryNavy,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildStatusMessage(BuildContext context) {
+    final isError = _message.contains('Error') || _message.contains('Failed');
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: (isError ? AppTheme.errorRed : AppTheme.successGreen)
+            .withValues(alpha: 0.1),
+        border: Border(
+          left: BorderSide(
+            color: isError ? AppTheme.errorRed : AppTheme.successGreen,
+            width: 3,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isError ? Icons.error_outline : Icons.check_circle_outline,
+            color: isError ? AppTheme.errorRed : AppTheme.successGreen,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _message,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: isError ? AppTheme.errorRed : AppTheme.successGreen,
+                  ),
+            ),
+          ),
+        ],
       ),
     );
   }
