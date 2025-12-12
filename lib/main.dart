@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/login_screen.dart';
 import 'package:frontend/main_app_screen.dart';
+import 'package:frontend/app_theme.dart';
 
 void main() {
   runApp(const MyApp());
@@ -32,10 +33,8 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Document Parser',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.theme,
+      debugShowCheckedModeBanner: false,
       home: _isLoggedIn
           ? MainAppScreen(onLogout: _handleLogout)
           : LoginScreen(onLoginSuccess: _handleLoginSuccess),
