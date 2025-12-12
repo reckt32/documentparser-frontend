@@ -43,8 +43,10 @@ class UploadDocument {
 
 class UploadScreen extends StatefulWidget {
   final int? questionnaireId;
-  final void Function(int? questionnaireId, Map<String, dynamic>? prefill)? onUploaded;
-  const UploadScreen({Key? key, this.questionnaireId, this.onUploaded}) : super(key: key);
+  final void Function(int? questionnaireId, Map<String, dynamic>? prefill)?
+  onUploaded;
+  const UploadScreen({Key? key, this.questionnaireId, this.onUploaded})
+    : super(key: key);
 
   @override
   State<UploadScreen> createState() => _UploadScreenState();
@@ -62,6 +64,41 @@ class _UploadScreenState extends State<UploadScreen> {
   void initState() {
     super.initState();
     _questionnaireId = widget.questionnaireId;
+  }
+
+  Future<void> _ensureQuestionnaireStarted() async {
+    if (_questionnaireId != null) return;
+    setState(() {
+      _isLoading = true;
+      _message = 'Starting questionnaire...';
+    });
+    try {
+      final resp = await http.post(
+        Uri.parse('$kBackendUrl/questionnaire/start'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': 'user'}),
+      );
+      if (resp.statusCode == 201) {
+        final data = jsonDecode(resp.body);
+        final id = data['questionnaire_id'] as int;
+        setState(() {
+          _questionnaireId = id;
+          _message = 'Questionnaire started (ID $id). Proceed to upload.';
+        });
+      } else {
+        setState(() {
+          _message = 'Failed to start questionnaire: ${resp.statusCode}';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _message = 'Error starting questionnaire: $e';
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _pickFile() async {
@@ -163,6 +200,14 @@ class _UploadScreenState extends State<UploadScreen> {
   }
 
   Future<void> _submitAll() async {
+    // Ensure a questionnaire is started so uploads link correctly and prefill is computed
+    if (_questionnaireId == null) {
+      await _ensureQuestionnaireStarted();
+      if (_questionnaireId == null) {
+        // Starting questionnaire failed; abort to avoid orphan uploads
+        return;
+      }
+    }
     if (_documents.isEmpty) {
       setState(() {
         _message = 'Please add at least one document.';
@@ -224,12 +269,20 @@ class _UploadScreenState extends State<UploadScreen> {
         final responseBody = await response.stream.bytesToString();
         final data = jsonDecode(responseBody);
         // Try to forward prefill to questionnaire if available (when questionnaireId was attached)
-        final int? returnedQid = (data['questionnaire_id'] is int) ? data['questionnaire_id'] as int : _questionnaireId;
-        final Map<String, dynamic>? prefill = {
-          // Pass along analysis/docInsights if present to prefill later
-          if (data['analysis'] != null) 'analysis': data['analysis'],
-          if (data['docInsights'] != null) 'docInsights': data['docInsights'],
-        };
+        final int? returnedQid =
+            (data['questionnaire_id'] is int)
+                ? data['questionnaire_id'] as int
+                : _questionnaireId;
+        // Prefer backend-provided prefill (contains lifestyle/allocation/insurance)
+        // Fallback to analysis/docInsights only if prefill is absent.
+        final Map<String, dynamic>? prefill =
+            (data['prefill'] is Map<String, dynamic>)
+                ? (data['prefill'] as Map<String, dynamic>)
+                : {
+                  if (data['analysis'] != null) 'analysis': data['analysis'],
+                  if (data['docInsights'] != null)
+                    'docInsights': data['docInsights'],
+                };
         // Update local UI state
         setState(() {
           _downloadUrl = data['summary_pdf_url'];

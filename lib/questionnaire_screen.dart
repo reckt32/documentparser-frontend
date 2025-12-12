@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 /// Multi-step financial questionnaire.
 /// Sections: personal_info, family_info, goals, risk_profile, insurance, lifestyle, estate (placeholder).
@@ -32,6 +33,7 @@ class QuestionnaireScreen extends StatefulWidget {
 class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   int _stepIndex = 0;
   int? _qid;
+  String? _planUrl;
 
   // Personal Info
   final _nameCtrl = TextEditingController();
@@ -146,15 +148,26 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   void _applyPrefill(Map<String, dynamic>? prefill) {
     if (prefill == null) return;
     try {
-      final di = (prefill['docInsights'] ?? prefill['docinsights']) as Map<String, dynamic>? ?? {};
+      final di =
+          (prefill['docInsights'] ?? prefill['docinsights'])
+              as Map<String, dynamic>? ??
+          {};
       final bank = (di['bank'] ?? {}) as Map<String, dynamic>;
       final portfolio = (di['portfolio'] ?? {}) as Map<String, dynamic>;
       final analysis = (prefill['analysis'] ?? {}) as Map<String, dynamic>;
+      // Direct prefill sections from backend
+      final lifestyle = (prefill['lifestyle'] ?? {}) as Map<String, dynamic>;
+      final allocPrefill = (prefill['allocation'] ?? {}) as Map<String, dynamic>;
+      final insurancePrefill = (prefill['insurance'] ?? {}) as Map<String, dynamic>;
 
-      // Lifestyle prefill from bank totals
+      // Lifestyle prefill from backend 'lifestyle' first, then bank totals
       final inflow = bank['total_inflows'];
       final outflow = bank['total_outflows'];
       final netcf = bank['net_cashflow'];
+      // Backend-provided lifestyle overrides, if present
+      final lfAnnual = lifestyle['annual_income'];
+      final lfMonthlyExp = lifestyle['monthly_expenses'];
+      final lfSavingsPct = lifestyle['savings_percent'];
 
       String _fmtNum(dynamic v) {
         if (v == null) return '';
@@ -162,52 +175,85 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
         return v.toString();
       }
 
-      // Annual income ≈ total inflows
-      if (_annualIncomeCtrl.text.trim().isEmpty && inflow != null) {
-        _annualIncomeCtrl.text = _fmtNum(inflow);
+      // Annual income: prefer backend lifestyle. Else ≈ total inflows
+      if (_annualIncomeCtrl.text.trim().isEmpty) {
+        if (lfAnnual != null) {
+          _annualIncomeCtrl.text = _fmtNum(lfAnnual);
+        } else if (inflow != null) {
+          _annualIncomeCtrl.text = _fmtNum(inflow);
+        }
       }
-      // Monthly expenses ≈ total outflows / 12
-      if (_monthlyExpensesCtrl.text.trim().isEmpty && outflow != null) {
+      // Monthly expenses: prefer backend lifestyle. Else ≈ total outflows / 12
+      if (_monthlyExpensesCtrl.text.trim().isEmpty) {
         try {
-          if (outflow is num) {
-            _monthlyExpensesCtrl.text = (outflow / 12.0).toStringAsFixed(2);
-          } else {
-            final parsed = double.tryParse(outflow.toString().replaceAll(',', ''));
-            if (parsed != null) {
-              _monthlyExpensesCtrl.text = (parsed / 12.0).toStringAsFixed(2);
+          if (lfMonthlyExp != null) {
+            if (lfMonthlyExp is num) {
+              _monthlyExpensesCtrl.text = lfMonthlyExp.toStringAsFixed(2);
+            } else {
+              final parsed = double.tryParse(lfMonthlyExp.toString().replaceAll(',', ''));
+              if (parsed != null) _monthlyExpensesCtrl.text = parsed.toStringAsFixed(2);
+            }
+          } else if (outflow != null) {
+            if (outflow is num) {
+              _monthlyExpensesCtrl.text = (outflow / 12.0).toStringAsFixed(2);
+            } else {
+              final parsed = double.tryParse(outflow.toString().replaceAll(',', ''));
+              if (parsed != null) {
+                _monthlyExpensesCtrl.text = (parsed / 12.0).toStringAsFixed(2);
+              }
             }
           }
         } catch (_) {}
       }
-      // Savings % ≈ max(0, net cf / inflow * 100)
-      if (_savingsPercentCtrl.text.trim().isEmpty && inflow != null && netcf != null) {
+      // Savings %: prefer backend lifestyle. Else ≈ max(0, net cf / inflow * 100)
+      if (_savingsPercentCtrl.text.trim().isEmpty) {
         try {
-          final inflowNum = (inflow is num) ? inflow.toDouble() : double.tryParse(inflow.toString().replaceAll(',', '')) ?? 0.0;
-          final netNum = (netcf is num) ? netcf.toDouble() : double.tryParse(netcf.toString().replaceAll(',', '')) ?? 0.0;
-          if (inflowNum > 0) {
-            final sp = (netNum / inflowNum) * 100.0;
-            _savingsPercentCtrl.text = sp.isFinite ? sp.toStringAsFixed(2) : '';
+          if (lfSavingsPct != null) {
+            final sp =
+                (lfSavingsPct is num)
+                    ? lfSavingsPct.toDouble()
+                    : double.tryParse(lfSavingsPct.toString().replaceAll(',', ''));
+            if (sp != null && sp.isFinite) {
+              _savingsPercentCtrl.text = sp.toStringAsFixed(2);
+            }
+          } else if (inflow != null && netcf != null) {
+            final inflowNum =
+                (inflow is num)
+                    ? inflow.toDouble()
+                    : double.tryParse(inflow.toString().replaceAll(',', '')) ??
+                        0.0;
+            final netNum =
+                (netcf is num)
+                    ? netcf.toDouble()
+                    : double.tryParse(netcf.toString().replaceAll(',', '')) ??
+                        0.0;
+            if (inflowNum > 0) {
+              final sp = (netNum / inflowNum) * 100.0;
+              _savingsPercentCtrl.text = sp.isFinite ? sp.toStringAsFixed(2) : '';
+            }
           }
         } catch (_) {}
       }
 
-      // Insurance prefill (sum assured or insured)
-      final insFromAnalysis = (analysis['insurance'] ?? {}) as Map<String, dynamic>;
+      // Insurance prefill: prefer backend insurance section, then analysis-derived
+      final insFromAnalysis =
+          (analysis['insurance'] ?? {}) as Map<String, dynamic>;
       if (_lifeCoverCtrl.text.trim().isEmpty) {
-        final lc = insFromAnalysis['lifeCover'];
+        final lc = insurancePrefill['life_cover'] ?? insFromAnalysis['lifeCover'];
         if (lc != null) _lifeCoverCtrl.text = _fmtNum(lc);
       }
       if (_healthCoverCtrl.text.trim().isEmpty) {
-        final hc = insFromAnalysis['healthCover'];
+        final hc = insurancePrefill['health_cover'] ?? insFromAnalysis['healthCover'];
         if (hc != null) _healthCoverCtrl.text = _fmtNum(hc);
       }
 
-      // Allocation prefill from portfolio or analysis recommended bands (best-effort)
-      final alloc = (portfolio['allocation'] ?? {}) as Map<String, dynamic>;
+      // Allocation prefill: prefer backend 'allocation', then portfolio allocation (best-effort)
+      final alloc = (allocPrefill.isNotEmpty ? allocPrefill : (portfolio['allocation'] ?? {})) as Map<String, dynamic>;
       void setAlloc(String key, TextEditingController c) {
         final v = alloc[key];
         if (c.text.trim().isEmpty && v != null) c.text = _fmtNum(v);
       }
+
       setAlloc('equity', _allocationCtrls['equity']!);
       setAlloc('debt', _allocationCtrls['debt']!);
       setAlloc('gold', _allocationCtrls['gold']!);
@@ -228,16 +274,22 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
       if (_savingsBand.isEmpty && _savingsPercentCtrl.text.isNotEmpty) {
         try {
           final sp = double.tryParse(_savingsPercentCtrl.text) ?? 0.0;
-          if (sp < 10) _savingsBand = '<10%';
-          else if (sp < 20) _savingsBand = '10-20%';
-          else if (sp < 30) _savingsBand = '20-30%';
-          else _savingsBand = '>30%';
+          if (sp < 10)
+            _savingsBand = '<10%';
+          else if (sp < 20)
+            _savingsBand = '10-20%';
+          else if (sp < 30)
+            _savingsBand = '20-30%';
+          else
+            _savingsBand = '>30%';
         } catch (_) {}
       }
 
       // PAN/name prefill from ITR or CAS if present in analysis/docInsights (best-effort)
-      final personalFromAnalysis = (analysis['personal'] ?? {}) as Map<String, dynamic>;
-      if (_nameCtrl.text.trim().isEmpty && personalFromAnalysis['name'] != null) {
+      final personalFromAnalysis =
+          (analysis['personal'] ?? {}) as Map<String, dynamic>;
+      if (_nameCtrl.text.trim().isEmpty &&
+          personalFromAnalysis['name'] != null) {
         _nameCtrl.text = personalFromAnalysis['name'].toString();
       }
       if (_panCtrl.text.trim().isEmpty && personalFromAnalysis['pan'] != null) {
@@ -256,6 +308,17 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
       );
       if (resp.statusCode == 200) {
         // Could hydrate fields if needed in future.
+      }
+      // Fetch prefill suggestions from backend and apply
+      final prefillResp = await http.get(
+        Uri.parse('${widget.backendUrl}/questionnaire/${_qid}/prefill'),
+      );
+      if (prefillResp.statusCode == 200) {
+        final data = jsonDecode(prefillResp.body) as Map<String, dynamic>;
+        _applyPrefill(data);
+        setState(() {
+          _statusMessage = 'Prefill applied from documents.';
+        });
       }
     } catch (_) {}
   }
@@ -298,6 +361,141 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
         _loading = false;
       });
     }
+  }
+
+  // Auto-save current section on navigation
+  Future<void> _autoSaveCurrentSection() async {
+    if (_qid == null) return;
+    switch (_stepIndex) {
+      case 0:
+        await _saveSection('personal_info', {
+          'name': _nameCtrl.text.trim(),
+          'age': _ageCtrl.text.trim(),
+          'pan': _panCtrl.text.trim(),
+          'dob': _dobCtrl.text.trim(),
+          'contact': _contactCtrl.text.trim(),
+          'marital_status': _maritalStatus,
+        });
+        break;
+      case 1:
+        await _saveSection('family_info', {
+          'spouse': _maritalStatus == 'Married' ? _spouseNameCtrl.text.trim() : null,
+          'children': _childrenCtrls
+              .map((m) => {
+                    'name': m['name']!.text.trim(),
+                    'age': m['age']!.text.trim(),
+                  })
+              .toList(),
+          'dependents': _hasDependents
+              ? _dependentsCtrls
+                  .map((m) => {
+                        'name': m['name']!.text.trim(),
+                        'relation': m['relation']!.text.trim(),
+                      })
+                  .toList()
+              : [],
+        });
+        break;
+      case 2:
+        await _saveSection('goals', {
+          'items': _addGoals
+              ? _goalCtrls
+                  .map((g) => {
+                        'name': g['name']!.text.trim(),
+                        'target_amount': g['target_amount']!.text.trim(),
+                        'horizon_years': g['horizon_years']!.text.trim(),
+                        'suggested_strategy': g['suggested_strategy']!.text.trim(),
+                      })
+                  .toList()
+              : [],
+        });
+        break;
+      case 3:
+        await _saveSection('risk_profile', {
+          'tolerance': _riskTolerance.toLowerCase(),
+          'primary_horizon': _primaryHorizon.toLowerCase(),
+          'primary_horizon_years': _primaryHorizonYearsCtrl.text.trim(),
+          'loss_tolerance_percent': _lossToleranceCtrl.text.trim(),
+          'goal_importance': _goalImportance.toLowerCase(),
+          'goal_flexibility': _goalFlexibility.toLowerCase(),
+          'behavior': _behavior.toLowerCase(),
+          'income_stability': _incomeStability.toLowerCase(),
+          'emergency_fund_months': _emergencyFundMonthsCtrl.text.trim(),
+          'equity_allocation_percent': _equityAllocationCtrl.text.trim(),
+        });
+        break;
+      case 4:
+        await _saveSection('insurance', {
+          'life_cover': _hasInsuranceDocs ? null : _lifeCoverCtrl.text.trim(),
+          'health_cover': _hasInsuranceDocs ? null : _healthCoverCtrl.text.trim(),
+          'uploaded_docs': _hasInsuranceDocs,
+        });
+        break;
+      case 5:
+        await _saveSection('lifestyle', {
+          'annual_income': _annualIncomeCtrl.text.trim(),
+          'monthly_expenses': _monthlyExpensesCtrl.text.trim(),
+          'monthly_emi': _monthlyEmiCtrl.text.trim(),
+          'emergency_fund': _emergencyFundCtrl.text.trim(),
+          'savings_percent': _savingsPercentCtrl.text.trim(),
+          'savings_band': _savingsBand,
+          'products': _currentProducts,
+          'allocation': {
+            for (final e in _allocationCtrls.entries)
+              if (e.value.text.trim().isNotEmpty) e.key: e.value.text.trim(),
+          },
+        });
+        break;
+      case 6:
+        await _saveSection('estate', {
+          'will_notes': _willStatusCtrl.text.trim(),
+          'nominee_consistency': _nomineeConsistencyCtrl.text.trim(),
+        });
+        break;
+      default:
+        break;
+    }
+  }
+
+  Future<void> _generateReport() async {
+    if (_qid == null) {
+      setState(() {
+        _statusMessage = 'Start questionnaire first.';
+      });
+      return;
+    }
+    setState(() {
+      _statusMessage = 'Generating financial report...';
+      _planUrl = null;
+    });
+    try {
+      final resp = await http.post(
+        Uri.parse('${widget.backendUrl}/report/generate'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'questionnaire_id': _qid, 'useLLM': false}),
+      );
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        setState(() {
+          _planUrl = data['financial_plan_pdf_url'] as String?;
+          _statusMessage = 'Report ready.';
+        });
+      } else {
+        setState(() {
+          _statusMessage = 'Failed: ${resp.statusCode} ${resp.body}';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'Error: $e';
+      });
+    }
+  }
+
+  Future<void> _openPlan() async {
+    if (_planUrl == null) return;
+    final uri = Uri.parse(_planUrl!);
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   // Section builders
@@ -1010,6 +1208,31 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
                     ),
                   ),
                   _navigationBar(steps.length),
+                  if (_stepIndex == steps.length - 1)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _loading ? null : () async {
+                                await _autoSaveCurrentSection();
+                                await _generateReport();
+                              },
+                              icon: const Icon(Icons.picture_as_pdf),
+                              label: const Text('Get Financial Report'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          if (_planUrl != null)
+                            ElevatedButton.icon(
+                              onPressed: _openPlan,
+                              icon: const Icon(Icons.open_in_new),
+                              label: const Text('Open PDF'),
+                            ),
+                        ],
+                      ),
+                    ),
                   if (_statusMessage.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.all(8.0),
@@ -1049,7 +1272,8 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
               onPressed:
                   _loading
                       ? null
-                      : () {
+                      : () async {
+                        await _autoSaveCurrentSection();
                         setState(() {
                           _stepIndex--;
                         });
@@ -1063,17 +1287,18 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
             onPressed:
                 _loading
                     ? null
-                    : () {
+                    : () async {
+                      await _autoSaveCurrentSection();
                       if (_stepIndex < total - 1) {
                         setState(() {
                           _stepIndex++;
                         });
                       } else {
-                        // Final step: submit and continue to upload flow
+                        // Keep flow to upload, but we now also show Get Financial Report button above
                         widget.onCompleted?.call();
                       }
                     },
-            child: Text(_stepIndex == total - 1 ? 'Submit & Continue' : 'Next'),
+            child: Text(_stepIndex == total - 1 ? 'Submit' : 'Next'),
           ),
         ],
       ),
