@@ -122,7 +122,7 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'user_id': 'user'}),
       );
-      if (resp.statusCode == 201) {
+if (resp.statusCode == 201) {
         final data = jsonDecode(resp.body);
         final id = data['questionnaire_id'] as int;
         setState(() {
@@ -130,6 +130,8 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
           _statusMessage = 'Questionnaire started (ID $id).';
         });
         widget.onQuestionnaireStarted(id);
+        // Immediately fetch prefill suggestions for the newly created questionnaire
+        await _fetchQuestionnaire();
       } else {
         setState(() {
           _statusMessage = 'Failed to start: ${resp.statusCode}';
@@ -161,6 +163,9 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
       final allocPrefill = (prefill['allocation'] ?? {}) as Map<String, dynamic>;
       final insurancePrefill = (prefill['insurance'] ?? {}) as Map<String, dynamic>;
 
+      bool changedBand = false;
+      int appliedCount = 0;
+
       // Lifestyle prefill from backend 'lifestyle' first, then bank totals
       final inflow = bank['total_inflows'];
       final outflow = bank['total_outflows'];
@@ -180,8 +185,10 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
       if (_annualIncomeCtrl.text.trim().isEmpty) {
         if (lfAnnual != null) {
           _annualIncomeCtrl.text = _fmtNum(lfAnnual);
+          appliedCount++;
         } else if (inflow != null) {
           _annualIncomeCtrl.text = _fmtNum(inflow);
+          appliedCount++;
         }
       }
       // Monthly expenses: prefer backend lifestyle. Else ≈ total outflows / 12
@@ -190,17 +197,23 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
           if (lfMonthlyExp != null) {
             if (lfMonthlyExp is num) {
               _monthlyExpensesCtrl.text = lfMonthlyExp.toStringAsFixed(2);
+              appliedCount++;
             } else {
               final parsed = double.tryParse(lfMonthlyExp.toString().replaceAll(',', ''));
-              if (parsed != null) _monthlyExpensesCtrl.text = parsed.toStringAsFixed(2);
+              if (parsed != null) {
+                _monthlyExpensesCtrl.text = parsed.toStringAsFixed(2);
+                appliedCount++;
+              }
             }
           } else if (outflow != null) {
             if (outflow is num) {
               _monthlyExpensesCtrl.text = (outflow / 12.0).toStringAsFixed(2);
+              appliedCount++;
             } else {
               final parsed = double.tryParse(outflow.toString().replaceAll(',', ''));
               if (parsed != null) {
                 _monthlyExpensesCtrl.text = (parsed / 12.0).toStringAsFixed(2);
+                appliedCount++;
               }
             }
           }
@@ -216,6 +229,7 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
                     : double.tryParse(lfSavingsPct.toString().replaceAll(',', ''));
             if (sp != null && sp.isFinite) {
               _savingsPercentCtrl.text = sp.toStringAsFixed(2);
+              appliedCount++;
             }
           } else if (inflow != null && netcf != null) {
             final inflowNum =
@@ -231,6 +245,7 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
             if (inflowNum > 0) {
               final sp = (netNum / inflowNum) * 100.0;
               _savingsPercentCtrl.text = sp.isFinite ? sp.toStringAsFixed(2) : '';
+              if (sp.isFinite) appliedCount++;
             }
           }
         } catch (_) {}
@@ -241,18 +256,27 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
           (analysis['insurance'] ?? {}) as Map<String, dynamic>;
       if (_lifeCoverCtrl.text.trim().isEmpty) {
         final lc = insurancePrefill['life_cover'] ?? insFromAnalysis['lifeCover'];
-        if (lc != null) _lifeCoverCtrl.text = _fmtNum(lc);
+        if (lc != null) {
+          _lifeCoverCtrl.text = _fmtNum(lc);
+          appliedCount++;
+        }
       }
       if (_healthCoverCtrl.text.trim().isEmpty) {
         final hc = insurancePrefill['health_cover'] ?? insFromAnalysis['healthCover'];
-        if (hc != null) _healthCoverCtrl.text = _fmtNum(hc);
+        if (hc != null) {
+          _healthCoverCtrl.text = _fmtNum(hc);
+          appliedCount++;
+        }
       }
 
       // Allocation prefill: prefer backend 'allocation', then portfolio allocation (best-effort)
       final alloc = (allocPrefill.isNotEmpty ? allocPrefill : (portfolio['allocation'] ?? {})) as Map<String, dynamic>;
       void setAlloc(String key, TextEditingController c) {
         final v = alloc[key];
-        if (c.text.trim().isEmpty && v != null) c.text = _fmtNum(v);
+        if (c.text.trim().isEmpty && v != null) {
+          c.text = _fmtNum(v);
+          appliedCount++;
+        }
       }
 
       setAlloc('equity', _allocationCtrls['equity']!);
@@ -268,6 +292,7 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
         final mid = adv['recommendedEquityMid'];
         if (mid != null) {
           _equityAllocationCtrl.text = _fmtNum(mid);
+          appliedCount++;
         }
       }
 
@@ -283,6 +308,7 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
             _savingsBand = '20-30%';
           else
             _savingsBand = '>30%';
+          changedBand = true;
         } catch (_) {}
       }
 
@@ -292,9 +318,19 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
       if (_nameCtrl.text.trim().isEmpty &&
           personalFromAnalysis['name'] != null) {
         _nameCtrl.text = personalFromAnalysis['name'].toString();
+        appliedCount++;
       }
       if (_panCtrl.text.trim().isEmpty && personalFromAnalysis['pan'] != null) {
         _panCtrl.text = personalFromAnalysis['pan'].toString();
+        appliedCount++;
+      }
+      // trigger a rebuild so dropdowns/derived labels reflect prefill in Flutter Web
+      if (mounted) {
+        setState(() {
+          _statusMessage = appliedCount > 0
+              ? 'Prefill applied ($appliedCount fields).'
+              : 'No prefill available.';
+        });
       }
     } catch (_) {
       // silent best-effort
