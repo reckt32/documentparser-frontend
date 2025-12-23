@@ -21,6 +21,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
   Map<String, dynamic>? _prefillData; // from backend analysis/docInsights
 
   List<Widget> _screens() {
+    print('[MainAppScreen] Building screens with _questionnaireId: $_questionnaireId, _prefillData: $_prefillData');
     return [
       HomeScreen(
         onStart: () {
@@ -33,11 +34,14 @@ class _MainAppScreenState extends State<MainAppScreen> {
         questionnaireId: _questionnaireId,
         // After successful upload (with qid), move to questionnaire with prefill
         onUploaded: (int? qid, Map<String, dynamic>? prefill) {
+          print('[MainAppScreen] onUploaded callback received - qid: $qid, prefill: $prefill');
+          print('[MainAppScreen] Prefill keys: ${prefill?.keys.toList()}');
           setState(() {
             _questionnaireId = qid ?? _questionnaireId;
             _prefillData = prefill;
             _selectedIndex = 2;
           });
+          print('[MainAppScreen] After setState - _questionnaireId: $_questionnaireId, _prefillData: $_prefillData');
         },
       ),
       QuestionnaireScreen(
@@ -45,6 +49,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
         questionnaireId: _questionnaireId,
         prefillData: _prefillData,
         onQuestionnaireStarted: (id) {
+          print('[MainAppScreen] onQuestionnaireStarted - id: $id');
           setState(() {
             _questionnaireId = id;
           });

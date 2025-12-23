@@ -268,12 +268,14 @@ class _UploadScreenState extends State<UploadScreen> {
 
       if (response.statusCode == 200) {
         final responseBody = await response.stream.bytesToString();
+        print('[UploadScreen] Upload response body: $responseBody');
         final data = jsonDecode(responseBody);
         // Try to forward prefill to questionnaire if available (when questionnaireId was attached)
         final int? returnedQid =
             (data['questionnaire_id'] is int)
                 ? data['questionnaire_id'] as int
                 : _questionnaireId;
+        print('[UploadScreen] Returned questionnaire ID: $returnedQid');
         // Prefer backend-provided prefill (contains lifestyle/allocation/insurance)
         // Fallback to analysis/docInsights only if prefill is absent.
         final Map<String, dynamic>? prefill =
@@ -284,6 +286,8 @@ class _UploadScreenState extends State<UploadScreen> {
                   if (data['docInsights'] != null)
                     'docInsights': data['docInsights'],
                 };
+        print('[UploadScreen] Prefill data to pass: $prefill');
+        print('[UploadScreen] Prefill keys: ${prefill?.keys.toList()}');
         // Update local UI state
         setState(() {
           _downloadUrl = data['summary_pdf_url'];
@@ -292,6 +296,7 @@ class _UploadScreenState extends State<UploadScreen> {
         });
         // Notify parent to navigate to Questionnaire with prefill
         if (widget.onUploaded != null) {
+          print('[UploadScreen] Calling onUploaded callback with qid: $returnedQid, prefill: $prefill');
           widget.onUploaded!(returnedQid, prefill);
         }
       } else {

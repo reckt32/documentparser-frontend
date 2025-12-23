@@ -54,6 +54,10 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   // Goals
   bool _addGoals = true;
   final List<Map<String, TextEditingController>> _goalCtrls = [];
+  
+  // Retirement Planning
+  bool _wantsRetirementPlanning = false;
+  final _desiredMonthlyPensionCtrl = TextEditingController();
 
   // Risk Profile
   String _riskTolerance = 'Medium';
@@ -68,10 +72,9 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   final _emergencyFundMonthsCtrl = TextEditingController();
   final _equityAllocationCtrl = TextEditingController();
 
-  // Insurance
+  // Insurance (used for term insurance calculations)
   final _lifeCoverCtrl = TextEditingController();
   final _healthCoverCtrl = TextEditingController();
-  bool _hasInsuranceDocs = true;
 
   // Lifestyle
   final _annualIncomeCtrl = TextEditingController();
@@ -90,9 +93,9 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
     'cash': TextEditingController(),
   };
 
-  // Estate (placeholder basic)
-  final _willStatusCtrl = TextEditingController();
-  final _nomineeConsistencyCtrl = TextEditingController();
+  // Estate
+  String _willStatus = 'Not Applicable';
+  final List<Map<String, TextEditingController>> _nomineeCtrls = [];
 
   bool _loading = false;
   String _statusMessage = '';
@@ -100,6 +103,9 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   @override
   void initState() {
     super.initState();
+    print('[QuestionnaireScreen] initState called');
+    print('[QuestionnaireScreen] widget.questionnaireId: ${widget.questionnaireId}');
+    print('[QuestionnaireScreen] widget.prefillData: ${widget.prefillData}');
     _qid = widget.questionnaireId;
     // Apply prefill values from uploaded document insights, if any
     _applyPrefill(widget.prefillData);
@@ -107,6 +113,31 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
       _fetchQuestionnaire();
     } else {
       _startQuestionnaire(); // auto-start so the form appears immediately
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant QuestionnaireScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    print('[QuestionnaireScreen] didUpdateWidget called');
+    print('[QuestionnaireScreen] old prefillData: ${oldWidget.prefillData}');
+    print('[QuestionnaireScreen] new prefillData: ${widget.prefillData}');
+    print('[QuestionnaireScreen] old questionnaireId: ${oldWidget.questionnaireId}');
+    print('[QuestionnaireScreen] new questionnaireId: ${widget.questionnaireId}');
+    
+    // If prefillData changed and new data is available, apply it
+    if (widget.prefillData != oldWidget.prefillData && widget.prefillData != null) {
+      print('[QuestionnaireScreen] Prefill data changed, applying new prefill...');
+      _applyPrefill(widget.prefillData);
+    }
+    
+    // If questionnaireId changed from null to a value, fetch questionnaire
+    if (widget.questionnaireId != oldWidget.questionnaireId) {
+      print('[QuestionnaireScreen] Questionnaire ID changed from ${oldWidget.questionnaireId} to ${widget.questionnaireId}');
+      _qid = widget.questionnaireId;
+      if (_qid != null && oldWidget.questionnaireId == null) {
+        _fetchQuestionnaire();
+      }
     }
   }
 
@@ -148,20 +179,44 @@ if (resp.statusCode == 201) {
     }
   }
 
+  // Helper function to safely convert dynamic maps to Map<String, dynamic>
+  // This is needed because JSON decoding on web returns LinkedMap<dynamic, dynamic>
+  Map<String, dynamic> _toStringDynamicMap(dynamic value) {
+    if (value == null) return {};
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) {
+      return Map<String, dynamic>.from(value);
+    }
+    return {};
+  }
+
   void _applyPrefill(Map<String, dynamic>? prefill) {
-    if (prefill == null) return;
+    print('[_applyPrefill] Called with prefill: $prefill');
+    if (prefill == null) {
+      print('[_applyPrefill] Prefill is null, returning early');
+      return;
+    }
+    if (prefill.isEmpty) {
+      print('[_applyPrefill] Prefill is empty map, returning early');
+      return;
+    }
     try {
-      final di =
-          (prefill['docInsights'] ?? prefill['docinsights'])
-              as Map<String, dynamic>? ??
-          {};
-      final bank = (di['bank'] ?? {}) as Map<String, dynamic>;
-      final portfolio = (di['portfolio'] ?? {}) as Map<String, dynamic>;
-      final analysis = (prefill['analysis'] ?? {}) as Map<String, dynamic>;
+      print('[_applyPrefill] Prefill keys: ${prefill.keys.toList()}');
+      final di = _toStringDynamicMap(prefill['docInsights'] ?? prefill['docinsights']);
+      print('[_applyPrefill] docInsights: $di');
+      final bank = _toStringDynamicMap(di['bank']);
+      print('[_applyPrefill] bank: $bank');
+      final portfolio = _toStringDynamicMap(di['portfolio']);
+      print('[_applyPrefill] portfolio: $portfolio');
+      final analysis = _toStringDynamicMap(prefill['analysis']);
+      print('[_applyPrefill] analysis: $analysis');
       // Direct prefill sections from backend
-      final lifestyle = (prefill['lifestyle'] ?? {}) as Map<String, dynamic>;
-      final allocPrefill = (prefill['allocation'] ?? {}) as Map<String, dynamic>;
-      final insurancePrefill = (prefill['insurance'] ?? {}) as Map<String, dynamic>;
+      final lifestyle = _toStringDynamicMap(prefill['lifestyle']);
+      print('[_applyPrefill] lifestyle: $lifestyle');
+      final allocPrefill = _toStringDynamicMap(prefill['allocation']);
+      print('[_applyPrefill] allocation: $allocPrefill');
+      final insurancePrefill = _toStringDynamicMap(prefill['insurance']);
+      print('[_applyPrefill] insurance: $insurancePrefill');
 
       bool changedBand = false;
       int appliedCount = 0;
@@ -251,9 +306,18 @@ if (resp.statusCode == 201) {
         } catch (_) {}
       }
 
+      // Monthly EMI prefill from backend lifestyle
+      if (_monthlyEmiCtrl.text.trim().isEmpty) {
+        final lfMonthlyEmi = lifestyle['monthly_emi'];
+        if (lfMonthlyEmi != null) {
+          _monthlyEmiCtrl.text = _fmtNum(lfMonthlyEmi);
+          print('[_applyPrefill] Prefilled monthly EMI: ${_monthlyEmiCtrl.text}');
+          appliedCount++;
+        }
+      }
+
       // Insurance prefill: prefer backend insurance section, then analysis-derived
-      final insFromAnalysis =
-          (analysis['insurance'] ?? {}) as Map<String, dynamic>;
+      final insFromAnalysis = _toStringDynamicMap(analysis['insurance']);
       if (_lifeCoverCtrl.text.trim().isEmpty) {
         final lc = insurancePrefill['life_cover'] ?? insFromAnalysis['lifeCover'];
         if (lc != null) {
@@ -270,7 +334,7 @@ if (resp.statusCode == 201) {
       }
 
       // Allocation prefill: prefer backend 'allocation', then portfolio allocation (best-effort)
-      final alloc = (allocPrefill.isNotEmpty ? allocPrefill : (portfolio['allocation'] ?? {})) as Map<String, dynamic>;
+      final alloc = allocPrefill.isNotEmpty ? allocPrefill : _toStringDynamicMap(portfolio['allocation']);
       void setAlloc(String key, TextEditingController c) {
         final v = alloc[key];
         if (c.text.trim().isEmpty && v != null) {
@@ -287,7 +351,7 @@ if (resp.statusCode == 201) {
       setAlloc('cash', _allocationCtrls['cash']!);
 
       // Basic risk hints from analysis
-      final adv = (analysis['advancedRisk'] ?? {}) as Map<String, dynamic>;
+      final adv = _toStringDynamicMap(analysis['advancedRisk']);
       if (_equityAllocationCtrl.text.trim().isEmpty) {
         final mid = adv['recommendedEquityMid'];
         if (mid != null) {
@@ -312,19 +376,59 @@ if (resp.statusCode == 201) {
         } catch (_) {}
       }
 
-      // PAN/name prefill from ITR or CAS if present in analysis/docInsights (best-effort)
-      final personalFromAnalysis =
-          (analysis['personal'] ?? {}) as Map<String, dynamic>;
-      if (_nameCtrl.text.trim().isEmpty &&
-          personalFromAnalysis['name'] != null) {
-        _nameCtrl.text = personalFromAnalysis['name'].toString();
-        appliedCount++;
+      // PAN/name/age prefill from backend personal_info, or ITR/CAS if present in analysis/docInsights (best-effort)
+      final personalFromBackend = _toStringDynamicMap(prefill['personal_info']);
+      final personalFromAnalysis = _toStringDynamicMap(analysis['personal']);
+      print('[_applyPrefill] personalFromBackend: $personalFromBackend');
+      print('[_applyPrefill] personalFromAnalysis: $personalFromAnalysis');
+      
+      // Name prefill: prefer backend personal_info, then analysis
+      if (_nameCtrl.text.trim().isEmpty) {
+        final name = personalFromBackend['name'] ?? personalFromAnalysis['name'];
+        if (name != null) {
+          _nameCtrl.text = name.toString();
+          print('[_applyPrefill] Prefilled name: ${_nameCtrl.text}');
+          appliedCount++;
+        }
       }
-      if (_panCtrl.text.trim().isEmpty && personalFromAnalysis['pan'] != null) {
-        _panCtrl.text = personalFromAnalysis['pan'].toString();
-        appliedCount++;
+      // Age prefill: prefer backend personal_info, then analysis
+      if (_ageCtrl.text.trim().isEmpty) {
+        final age = personalFromBackend['age'] ?? personalFromAnalysis['age'];
+        if (age != null) {
+          _ageCtrl.text = age.toString();
+          print('[_applyPrefill] Prefilled age: ${_ageCtrl.text}');
+          appliedCount++;
+        }
+      }
+      // PAN prefill
+      if (_panCtrl.text.trim().isEmpty) {
+        final pan = personalFromBackend['pan'] ?? personalFromAnalysis['pan'];
+        if (pan != null) {
+          _panCtrl.text = pan.toString();
+          print('[_applyPrefill] Prefilled PAN: ${_panCtrl.text}');
+          appliedCount++;
+        }
+      }
+      // DOB prefill
+      if (_dobCtrl.text.trim().isEmpty) {
+        final dob = personalFromBackend['dob'] ?? personalFromAnalysis['dob'];
+        if (dob != null) {
+          _dobCtrl.text = dob.toString();
+          print('[_applyPrefill] Prefilled DOB: ${_dobCtrl.text}');
+          appliedCount++;
+        }
+      }
+      // Contact prefill
+      if (_contactCtrl.text.trim().isEmpty) {
+        final contact = personalFromBackend['contact'] ?? personalFromBackend['email'] ?? personalFromBackend['phone'] ?? personalFromAnalysis['contact'];
+        if (contact != null) {
+          _contactCtrl.text = contact.toString();
+          print('[_applyPrefill] Prefilled contact: ${_contactCtrl.text}');
+          appliedCount++;
+        }
       }
       // trigger a rebuild so dropdowns/derived labels reflect prefill in Flutter Web
+      print('[_applyPrefill] Applied $appliedCount fields, changedBand: $changedBand');
       if (mounted) {
         setState(() {
           _statusMessage = appliedCount > 0
@@ -332,32 +436,49 @@ if (resp.statusCode == 201) {
               : 'No prefill available.';
         });
       }
-    } catch (_) {
-      // silent best-effort
+    } catch (e, stackTrace) {
+      print('[_applyPrefill] Error: $e');
+      print('[_applyPrefill] Stack trace: $stackTrace');
     }
   }
 
   Future<void> _fetchQuestionnaire() async {
-    if (_qid == null) return;
+    print('[_fetchQuestionnaire] Called with _qid: $_qid');
+    if (_qid == null) {
+      print('[_fetchQuestionnaire] _qid is null, returning early');
+      return;
+    }
     try {
+      print('[_fetchQuestionnaire] Fetching questionnaire from ${widget.backendUrl}/questionnaire/$_qid');
       final resp = await http.get(
         Uri.parse('${widget.backendUrl}/questionnaire/${_qid}'),
       );
+      print('[_fetchQuestionnaire] Questionnaire response status: ${resp.statusCode}');
       if (resp.statusCode == 200) {
+        print('[_fetchQuestionnaire] Questionnaire response body: ${resp.body}');
         // Could hydrate fields if needed in future.
       }
       // Fetch prefill suggestions from backend and apply
+      print('[_fetchQuestionnaire] Fetching prefill from ${widget.backendUrl}/questionnaire/$_qid/prefill');
       final prefillResp = await http.get(
         Uri.parse('${widget.backendUrl}/questionnaire/${_qid}/prefill'),
       );
+      print('[_fetchQuestionnaire] Prefill response status: ${prefillResp.statusCode}');
+      print('[_fetchQuestionnaire] Prefill response body: ${prefillResp.body}');
       if (prefillResp.statusCode == 200) {
         final data = jsonDecode(prefillResp.body) as Map<String, dynamic>;
+        print('[_fetchQuestionnaire] Parsed prefill data: $data');
         _applyPrefill(data);
         setState(() {
           _statusMessage = 'Prefill applied from documents.';
         });
+      } else {
+        print('[_fetchQuestionnaire] Prefill request failed with status: ${prefillResp.statusCode}');
       }
-    } catch (_) {}
+    } catch (e, stackTrace) {
+      print('[_fetchQuestionnaire] Error: $e');
+      print('[_fetchQuestionnaire] Stack trace: $stackTrace');
+    }
   }
 
   Future<void> _saveSection(
@@ -445,6 +566,8 @@ if (resp.statusCode == 201) {
                       })
                   .toList()
               : [],
+          'wants_retirement_planning': _wantsRetirementPlanning,
+          'desired_monthly_pension': _desiredMonthlyPensionCtrl.text.trim(),
         });
         break;
       case 3:
@@ -462,13 +585,6 @@ if (resp.statusCode == 201) {
         });
         break;
       case 4:
-        await _saveSection('insurance', {
-          'life_cover': _hasInsuranceDocs ? null : _lifeCoverCtrl.text.trim(),
-          'health_cover': _hasInsuranceDocs ? null : _healthCoverCtrl.text.trim(),
-          'uploaded_docs': _hasInsuranceDocs,
-        });
-        break;
-      case 5:
         await _saveSection('lifestyle', {
           'annual_income': _annualIncomeCtrl.text.trim(),
           'monthly_expenses': _monthlyExpensesCtrl.text.trim(),
@@ -483,10 +599,16 @@ if (resp.statusCode == 201) {
           },
         });
         break;
-      case 6:
+      case 5:
         await _saveSection('estate', {
-          'will_notes': _willStatusCtrl.text.trim(),
-          'nominee_consistency': _nomineeConsistencyCtrl.text.trim(),
+          'will_status': _willStatus,
+          'nominees': _nomineeCtrls
+              .map((n) => {
+                    'name': n['name']!.text.trim(),
+                    'relation': n['relation']!.text.trim(),
+                    'allocation_percent': n['allocation']!.text.trim(),
+                  })
+              .toList(),
         });
         break;
       default:
@@ -509,7 +631,7 @@ if (resp.statusCode == 201) {
       final resp = await http.post(
         Uri.parse('${widget.backendUrl}/report/generate'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'questionnaire_id': _qid, 'useLLM': false}),
+        body: jsonEncode({'questionnaire_id': _qid, 'useLLM': true}),
       );
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body);
@@ -664,6 +786,70 @@ if (resp.statusCode == 201) {
                 ]),
             ],
           ),
+        // Term Insurance Information (shown when there are financial dependents)
+        if (_childrenCount > 0 || (_hasDependents && _dependentsCtrls.isNotEmpty))
+          Builder(builder: (context) {
+            double age = double.tryParse(_ageCtrl.text.trim()) ?? 30;
+            double monthlyIncome = (double.tryParse(_annualIncomeCtrl.text.trim()) ?? 0) / 12;
+            double currentLifeCover = double.tryParse(_lifeCoverCtrl.text.trim()) ?? 0;
+            
+            int yearsToRetirement = (60 - age).clamp(0, 60).toInt();
+            double requiredTermCover = yearsToRetirement * monthlyIncome * 12;
+            double gap = (requiredTermCover - currentLifeCover).clamp(0, double.infinity);
+            bool isAdequate = currentLifeCover >= requiredTermCover;
+            
+            return Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: isAdequate ? Colors.green.shade50 : Colors.red.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: isAdequate ? Colors.green.shade200 : Colors.red.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        isAdequate ? Icons.check_circle : Icons.warning,
+                        color: isAdequate ? Colors.green : Colors.red,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Term Insurance Requirement',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: isAdequate ? Colors.green : Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'You have financial dependents. Term insurance is essential.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(height: 8),
+                  Text('Required Cover: ₹${requiredTermCover.toStringAsFixed(0)}'),
+                  Text('(Formula: (60-age) × monthly income × 12)'),
+                  if (currentLifeCover > 0)
+                    Text('Current Life Cover: ₹${currentLifeCover.toStringAsFixed(0)}'),
+                  if (!isAdequate && gap > 0)
+                    Text(
+                      'Gap: ₹${gap.toStringAsFixed(0)}',
+                      style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                    ),
+                  if (isAdequate)
+                    const Text(
+                      '✓ Your current cover is adequate',
+                      style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                    ),
+                ],
+              ),
+            );
+          }),
         _saveButton(() {
           _saveSection('family_info', {
             'spouse':
@@ -690,6 +876,7 @@ if (resp.statusCode == 201) {
                         )
                         .toList()
                     : [],
+            'has_financial_dependents': _childrenCount > 0 || (_hasDependents && _dependentsCtrls.isNotEmpty),
           });
         }),
       ],
@@ -697,6 +884,25 @@ if (resp.statusCode == 201) {
   }
 
   Widget _buildGoals() {
+    // Calculate retirement corpus for display
+    double age = double.tryParse(_ageCtrl.text.trim()) ?? 30;
+    double monthlyIncome = (double.tryParse(_annualIncomeCtrl.text.trim()) ?? 0) / 12;
+    double monthlyExpenses = double.tryParse(_monthlyExpensesCtrl.text.trim()) ?? 0;
+    double desiredPension = double.tryParse(_desiredMonthlyPensionCtrl.text.trim()) ?? 0;
+    
+    int yearsToRetirement = (60 - age).clamp(0, 60).toInt();
+    double standardCorpus = yearsToRetirement * monthlyIncome * 12;
+    double inflationAdjustedCorpus = 0;
+    if (desiredPension > 0) {
+      double inflationMultiplier = 1.06; // 6% inflation
+      for (int i = 0; i < yearsToRetirement; i++) {
+        inflationMultiplier *= 1.06;
+      }
+      inflationAdjustedCorpus = desiredPension * 12 * inflationMultiplier * 25; // 25 years of retirement
+    }
+    
+    bool pensionBelowExpenses = desiredPension > 0 && monthlyExpenses > 0 && desiredPension < monthlyExpenses;
+    
     return _sectionCard(
       title: 'Goals',
       children: [
@@ -725,6 +931,71 @@ if (resp.statusCode == 201) {
                 _goalTile(i, _goalCtrls[i]),
             ],
           ),
+        const Divider(height: 32),
+        // Retirement Planning Section
+        SwitchListTile(
+          title: const Text('Retirement Planning'),
+          subtitle: const Text('Plan for retirement pension'),
+          value: _wantsRetirementPlanning,
+          onChanged: (v) => setState(() => _wantsRetirementPlanning = v),
+        ),
+        if (_wantsRetirementPlanning) ...[
+          _textField(
+            _desiredMonthlyPensionCtrl,
+            'Desired Monthly Pension (₹)',
+            keyboard: TextInputType.number,
+          ),
+          if (pensionBelowExpenses)
+            Container(
+              padding: const EdgeInsets.all(8),
+              margin: const EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                border: Border.all(color: Colors.orange),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                children: const [
+                  Icon(Icons.warning, color: Colors.orange, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Pension is below your current monthly expenses. Consider setting a higher amount.',
+                      style: TextStyle(color: Colors.orange, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Container(
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.green.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.green.shade200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Retirement Calculations',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+                ),
+                const SizedBox(height: 8),
+                Text('Years to Retirement: $yearsToRetirement years'),
+                Text('Standard Corpus: ₹${standardCorpus.toStringAsFixed(0)}'),
+                Text('(Formula: (60-age) × monthly income × 12)'),
+                if (desiredPension > 0) ...[
+                  const Divider(),
+                  Text('Your Pension Goal: ₹${desiredPension.toStringAsFixed(0)}/month'),
+                  Text('Inflation-Adjusted Corpus: ₹${inflationAdjustedCorpus.toStringAsFixed(0)}'),
+                  const Text('(Assumes 6% inflation, 25-year retirement)', style: TextStyle(fontSize: 11)),
+                ],
+              ],
+            ),
+          ),
+        ],
         _saveButton(() {
           _saveSection('goals', {
             'items':
@@ -741,11 +1012,14 @@ if (resp.statusCode == 201) {
                         )
                         .toList()
                     : [],
+            'wants_retirement_planning': _wantsRetirementPlanning,
+            'desired_monthly_pension': _desiredMonthlyPensionCtrl.text.trim(),
           });
         }),
       ],
     );
   }
+
 
   Widget _goalTile(int i, Map<String, TextEditingController> ctrls) {
     return Card(
@@ -921,38 +1195,6 @@ if (resp.statusCode == 201) {
     );
   }
 
-  Widget _buildInsurance() {
-    return _sectionCard(
-      title: 'Insurance',
-      children: [
-        SwitchListTile(
-          title: const Text('Insurance documents will be uploaded'),
-          value: _hasInsuranceDocs,
-          onChanged: (v) => setState(() => _hasInsuranceDocs = v),
-        ),
-        if (!_hasInsuranceDocs)
-          _textField(
-            _lifeCoverCtrl,
-            'Life Cover (₹)',
-            keyboard: TextInputType.number,
-          ),
-        if (!_hasInsuranceDocs)
-          _textField(
-            _healthCoverCtrl,
-            'Health Cover (₹)',
-            keyboard: TextInputType.number,
-          ),
-        _saveButton(() {
-          _saveSection('insurance', {
-            'life_cover': _hasInsuranceDocs ? null : _lifeCoverCtrl.text.trim(),
-            'health_cover':
-                _hasInsuranceDocs ? null : _healthCoverCtrl.text.trim(),
-            'uploaded_docs': _hasInsuranceDocs,
-          });
-        }),
-      ],
-    );
-  }
 
   Widget _buildLifestyle() {
     return _sectionCard(
@@ -1014,7 +1256,7 @@ if (resp.statusCode == 201) {
         ),
         const SizedBox(height: 12),
         const Text(
-          'Allocation % (optional total 0-100)',
+          'Allocation % (optional)',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         _allocationRow('Equity', _allocationCtrls['equity']!),
@@ -1047,14 +1289,93 @@ if (resp.statusCode == 201) {
 
   Widget _buildEstate() {
     return _sectionCard(
-      title: 'Estate (Basic)',
+      title: 'Estate Planning',
       children: [
-        _textField(_willStatusCtrl, 'Will Status / Notes'),
-        _textField(_nomineeConsistencyCtrl, 'Nominee Consistency Notes'),
+        _dropdown<String>(
+          label: 'Will Status',
+          value: _willStatus,
+          items: const ['Yes', 'No', 'Not Applicable'],
+          onChanged: (v) => setState(() => _willStatus = v),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Nominee Details',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            ElevatedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _nomineeCtrls.add({
+                    'name': TextEditingController(),
+                    'relation': TextEditingController(),
+                    'allocation': TextEditingController(),
+                  });
+                });
+              },
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Add Nominee'),
+            ),
+          ],
+        ),
+        if (_nomineeCtrls.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'No nominees added. Click "Add Nominee" to add nominee details.',
+              style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+            ),
+          ),
+        for (int i = 0; i < _nomineeCtrls.length; i++)
+          Card(
+            margin: const EdgeInsets.symmetric(vertical: 8),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                children: [
+                  _textField(
+                    _nomineeCtrls[i]['name']!,
+                    'Nominee ${i + 1} Name',
+                  ),
+                  const SizedBox(height: 12),
+                  _textField(
+                    _nomineeCtrls[i]['relation']!,
+                    'Relation',
+                  ),
+                  const SizedBox(height: 12),
+                  _textField(
+                    _nomineeCtrls[i]['allocation']!,
+                    'Share %',
+                    keyboard: TextInputType.number,
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: IconButton(
+                      icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
+                      onPressed: () {
+                        setState(() {
+                          _nomineeCtrls.removeAt(i);
+                        });
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         _saveButton(() {
           _saveSection('estate', {
-            'will_notes': _willStatusCtrl.text.trim(),
-            'nominee_consistency': _nomineeConsistencyCtrl.text.trim(),
+            'will_status': _willStatus,
+            'nominees': _nomineeCtrls
+                .map((n) => {
+                      'name': n['name']!.text.trim(),
+                      'relation': n['relation']!.text.trim(),
+                      'allocation_percent': n['allocation']!.text.trim(),
+                    })
+                .toList(),
           });
         }),
       ],
@@ -1218,7 +1539,6 @@ if (resp.statusCode == 201) {
       _buildFamilyInfo(),
       _buildGoals(),
       _buildRiskProfile(),
-      _buildInsurance(),
       _buildLifestyle(),
       _buildEstate(),
     ];
@@ -1517,8 +1837,11 @@ if (resp.statusCode == 201) {
     for (final c in _allocationCtrls.values) {
       c.dispose();
     }
-    _willStatusCtrl.dispose();
-    _nomineeConsistencyCtrl.dispose();
+    for (final m in _nomineeCtrls) {
+      m['name']!.dispose();
+      m['relation']!.dispose();
+      m['allocation']!.dispose();
+    }
     _lossToleranceCtrl.dispose();
     _primaryHorizonYearsCtrl.dispose();
     _emergencyFundMonthsCtrl.dispose();
