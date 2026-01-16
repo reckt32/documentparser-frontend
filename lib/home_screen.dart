@@ -30,6 +30,15 @@ class HomeScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Primary logo
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 60, maxWidth: 180),
+            child: Image.asset(
+              'assets/primarylogo.png',
+              fit: BoxFit.contain,
+            ),
+          ),
+          const SizedBox(height: 24),
           // Gold accent bar
           AppTheme.goldAccentBar(width: 80, height: 3),
           const SizedBox(height: 32),

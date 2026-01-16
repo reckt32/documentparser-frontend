@@ -96,6 +96,15 @@ class _LoginScreenState extends State<LoginScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Primary logo
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 80, maxWidth: 200),
+            child: Image.asset(
+              'assets/primarylogo.png',
+              fit: BoxFit.contain,
+            ),
+          ),
+          const SizedBox(height: 32),
           // Gold accent bar
           AppTheme.goldAccentBar(width: 80, height: 3),
           const SizedBox(height: 40),

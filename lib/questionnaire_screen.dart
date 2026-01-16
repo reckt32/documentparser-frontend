@@ -4,6 +4,26 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:frontend/app_theme.dart';
 
+/// Predefined goal types for financial planning
+const List<String> kGoalTypes = [
+  'Children\'s Education',
+  'Children\'s Marriage',
+  'Vacation',
+  'Home Purchase',
+  'Lifestyle (Bike/Car/etc)',
+  'Retirement Corpus',
+  'Emergency Fund',
+  'Wealth Creation',
+  'Medical/Healthcare',
+  'Home Renovation',
+  'Debt Repayment',
+  'Business/Startup',
+  'Wedding',
+  'Inheritance/Legacy',
+  'Charity/Philanthropy',
+  'Other',
+];
+
 /// Multi-step financial questionnaire.
 /// Sections: personal_info, family_info, goals, risk_profile, insurance, lifestyle, estate (placeholder).
 /// Branching rules:
@@ -54,6 +74,7 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   // Goals
   bool _addGoals = true;
   final List<Map<String, TextEditingController>> _goalCtrls = [];
+  final List<String> _goalTypes = []; // Selected goal type for each goal
   
   // Retirement Planning
   bool _wantsRetirementPlanning = false;
@@ -918,11 +939,11 @@ if (resp.statusCode == 201) {
                 onPressed: () {
                   setState(() {
                     _goalCtrls.add({
-                      'name': TextEditingController(),
                       'target_amount': TextEditingController(),
                       'horizon_years': TextEditingController(),
                       'suggested_strategy': TextEditingController(),
                     });
+                    _goalTypes.add(kGoalTypes.first); // Default to first goal type
                   });
                 },
                 child: const Text('Add Goal'),
@@ -1000,17 +1021,15 @@ if (resp.statusCode == 201) {
           _saveSection('goals', {
             'items':
                 _addGoals
-                    ? _goalCtrls
-                        .map(
-                          (g) => {
-                            'name': g['name']!.text.trim(),
-                            'target_amount': g['target_amount']!.text.trim(),
-                            'horizon_years': g['horizon_years']!.text.trim(),
-                            'suggested_strategy':
-                                g['suggested_strategy']!.text.trim(),
-                          },
-                        )
-                        .toList()
+                    ? List.generate(_goalCtrls.length, (i) {
+                        final g = _goalCtrls[i];
+                        return {
+                          'name': i < _goalTypes.length ? _goalTypes[i] : '',
+                          'target_amount': g['target_amount']!.text.trim(),
+                          'horizon_years': g['horizon_years']!.text.trim(),
+                          'suggested_strategy': g['suggested_strategy']!.text.trim(),
+                        };
+                      })
                     : [],
             'wants_retirement_planning': _wantsRetirementPlanning,
             'desired_monthly_pension': _desiredMonthlyPensionCtrl.text.trim(),
@@ -1028,7 +1047,16 @@ if (resp.statusCode == 201) {
         padding: const EdgeInsets.all(12.0),
         child: Column(
           children: [
-            _textField(ctrls['name']!, 'Goal ${i + 1} Name'),
+            _dropdown<String>(
+              label: 'Goal ${i + 1} Type',
+              value: i < _goalTypes.length ? _goalTypes[i] : kGoalTypes.first,
+              items: kGoalTypes,
+              onChanged: (v) => setState(() {
+                if (i < _goalTypes.length) {
+                  _goalTypes[i] = v;
+                }
+              }),
+            ),
             _inlineRow([
               Expanded(
                 child: _textField(
@@ -1057,6 +1085,9 @@ if (resp.statusCode == 201) {
                 onPressed: () {
                   setState(() {
                     _goalCtrls.removeAt(i);
+                    if (i < _goalTypes.length) {
+                      _goalTypes.removeAt(i);
+                    }
                   });
                 },
               ),
@@ -1066,6 +1097,7 @@ if (resp.statusCode == 201) {
       ),
     );
   }
+
 
   Widget _buildRiskProfile() {
     return _sectionCard(

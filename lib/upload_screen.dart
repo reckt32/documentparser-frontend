@@ -489,12 +489,17 @@ class _UploadScreenState extends State<UploadScreen> {
         ),
         borderRadius: BorderRadius.circular(2),
       ),
-      child: Column(
+      child: 
+       Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // Outlined icon box
-          Container(
+          Center(
+            child: Container(
             width: 100,
             height: 100,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
               border: Border.all(
                 color: AppTheme.accentGold,
@@ -507,7 +512,7 @@ class _UploadScreenState extends State<UploadScreen> {
               size: 48,
               color: AppTheme.accentGold,
             ),
-          ),
+          ),),
           const SizedBox(height: 24),
           Text(
             'No documents added yet',
