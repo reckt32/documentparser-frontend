@@ -75,6 +75,11 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   bool _addGoals = true;
   final List<Map<String, TextEditingController>> _goalCtrls = [];
   final List<String> _goalTypes = []; // Selected goal type for each goal
+  // Per-goal risk profile settings
+  final List<String> _goalRiskTolerances = [];
+  final List<String> _goalImportances = [];
+  final List<String> _goalFlexibilities = [];
+  final List<String> _goalBehaviors = [];
   
   // Retirement Planning
   bool _wantsRetirementPlanning = false;
@@ -578,14 +583,20 @@ if (resp.statusCode == 201) {
       case 2:
         await _saveSection('goals', {
           'items': _addGoals
-              ? _goalCtrls
-                  .map((g) => {
-                        'name': g['name']!.text.trim(),
-                        'target_amount': g['target_amount']!.text.trim(),
-                        'horizon_years': g['horizon_years']!.text.trim(),
-                        'suggested_strategy': g['suggested_strategy']!.text.trim(),
-                      })
-                  .toList()
+              ? List.generate(_goalCtrls.length, (i) {
+                  final g = _goalCtrls[i];
+                  return {
+                    'name': i < _goalTypes.length ? _goalTypes[i] : '',
+                    'target_amount': g['target_amount']!.text.trim(),
+                    'horizon_years': g['horizon_years']!.text.trim(),
+                    'suggested_strategy': g['suggested_strategy']!.text.trim(),
+                    // Per-goal risk profile
+                    'risk_tolerance': i < _goalRiskTolerances.length ? _goalRiskTolerances[i].toLowerCase() : 'medium',
+                    'goal_importance': i < _goalImportances.length ? _goalImportances[i].toLowerCase() : 'important',
+                    'goal_flexibility': i < _goalFlexibilities.length ? _goalFlexibilities[i].toLowerCase() : 'fixed',
+                    'behavior': i < _goalBehaviors.length ? _goalBehaviors[i].toLowerCase() : 'hold',
+                  };
+                })
               : [],
           'wants_retirement_planning': _wantsRetirementPlanning,
           'desired_monthly_pension': _desiredMonthlyPensionCtrl.text.trim(),
@@ -944,6 +955,11 @@ if (resp.statusCode == 201) {
                       'suggested_strategy': TextEditingController(),
                     });
                     _goalTypes.add(kGoalTypes.first); // Default to first goal type
+                    // Initialize per-goal risk profile with defaults
+                    _goalRiskTolerances.add('Medium');
+                    _goalImportances.add('Important');
+                    _goalFlexibilities.add('Fixed');
+                    _goalBehaviors.add('Hold');
                   });
                 },
                 child: const Text('Add Goal'),
@@ -1028,6 +1044,11 @@ if (resp.statusCode == 201) {
                           'target_amount': g['target_amount']!.text.trim(),
                           'horizon_years': g['horizon_years']!.text.trim(),
                           'suggested_strategy': g['suggested_strategy']!.text.trim(),
+                          // Per-goal risk profile
+                          'risk_tolerance': i < _goalRiskTolerances.length ? _goalRiskTolerances[i].toLowerCase() : 'medium',
+                          'goal_importance': i < _goalImportances.length ? _goalImportances[i].toLowerCase() : 'important',
+                          'goal_flexibility': i < _goalFlexibilities.length ? _goalFlexibilities[i].toLowerCase() : 'fixed',
+                          'behavior': i < _goalBehaviors.length ? _goalBehaviors[i].toLowerCase() : 'hold',
                         };
                       })
                     : [],
@@ -1078,6 +1099,49 @@ if (resp.statusCode == 201) {
               ctrls['suggested_strategy']!,
               'Suggested Strategy (optional)',
             ),
+            const Divider(height: 20),
+            const Text('Goal Risk Profile', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            _dropdown<String>(
+              label: 'Risk Tolerance',
+              value: i < _goalRiskTolerances.length ? _goalRiskTolerances[i] : 'Medium',
+              items: const ['Low', 'Medium', 'High'],
+              onChanged: (v) => setState(() {
+                if (i < _goalRiskTolerances.length) {
+                  _goalRiskTolerances[i] = v;
+                }
+              }),
+            ),
+            _dropdown<String>(
+              label: 'Goal Importance',
+              value: i < _goalImportances.length ? _goalImportances[i] : 'Important',
+              items: const ['Essential', 'Important', 'Lifestyle'],
+              onChanged: (v) => setState(() {
+                if (i < _goalImportances.length) {
+                  _goalImportances[i] = v;
+                }
+              }),
+            ),
+            _dropdown<String>(
+              label: 'Goal Flexibility',
+              value: i < _goalFlexibilities.length ? _goalFlexibilities[i] : 'Fixed',
+              items: const ['Critical', 'Fixed', 'Flexible'],
+              onChanged: (v) => setState(() {
+                if (i < _goalFlexibilities.length) {
+                  _goalFlexibilities[i] = v;
+                }
+              }),
+            ),
+            _dropdown<String>(
+              label: 'Behaviour In 15% Drop',
+              value: i < _goalBehaviors.length ? _goalBehaviors[i] : 'Hold',
+              items: const ['Sell', 'Reduce', 'Hold', 'Buy', 'Aggressive Buy'],
+              onChanged: (v) => setState(() {
+                if (i < _goalBehaviors.length) {
+                  _goalBehaviors[i] = v;
+                }
+              }),
+            ),
             Align(
               alignment: Alignment.centerRight,
               child: IconButton(
@@ -1085,9 +1149,11 @@ if (resp.statusCode == 201) {
                 onPressed: () {
                   setState(() {
                     _goalCtrls.removeAt(i);
-                    if (i < _goalTypes.length) {
-                      _goalTypes.removeAt(i);
-                    }
+                    if (i < _goalTypes.length) _goalTypes.removeAt(i);
+                    if (i < _goalRiskTolerances.length) _goalRiskTolerances.removeAt(i);
+                    if (i < _goalImportances.length) _goalImportances.removeAt(i);
+                    if (i < _goalFlexibilities.length) _goalFlexibilities.removeAt(i);
+                    if (i < _goalBehaviors.length) _goalBehaviors.removeAt(i);
                   });
                 },
               ),
@@ -1099,61 +1165,21 @@ if (resp.statusCode == 201) {
   }
 
 
+
   Widget _buildRiskProfile() {
     return _sectionCard(
-      title: 'Risk Profile',
+      title: 'General Risk Profile',
       children: [
-        _dropdown<String>(
-          label: 'Risk Tolerance',
-          value: _riskTolerance,
-          items: const ['Low', 'Medium', 'High'],
-          onChanged: (v) => setState(() => _riskTolerance = v),
-        ),
-        _dropdown<String>(
-          label: 'Primary Goal Horizon',
-          value: _primaryHorizon,
-          items: const ['Short', 'Medium', 'Long'],
-          onChanged: (v) => setState(() => _primaryHorizon = v),
-        ),
-        _textField(
-          _primaryHorizonYearsCtrl,
-          'Primary Horizon (Years)',
-          keyboard: TextInputType.number,
-        ),
         _textField(
           _lossToleranceCtrl,
           'Max Short-Term Loss % You Can Tolerate',
           keyboard: TextInputType.number,
         ),
         _dropdown<String>(
-          label: 'Goal Importance',
-          value: _goalImportance,
-          items: const ['Essential', 'Important', 'Lifestyle'],
-          onChanged: (v) => setState(() => _goalImportance = v),
-        ),
-        _dropdown<String>(
-          label: 'Goal Flexibility',
-          value: _goalFlexibility,
-          items: const ['Critical', 'Fixed', 'Flexible'],
-          onChanged: (v) => setState(() => _goalFlexibility = v),
-        ),
-        _dropdown<String>(
           label: 'Behaviour In 15% Drop',
           value: _behavior,
           items: const ['Sell', 'Reduce', 'Hold', 'Buy', 'Aggressive Buy'],
           onChanged: (v) => setState(() => _behavior = v),
-        ),
-        _dropdown<String>(
-          label: 'Income Stability',
-          value: _incomeStability,
-          items: const [
-            'Very Unstable',
-            'Unstable',
-            'Average',
-            'Stable',
-            'Very Stable',
-          ],
-          onChanged: (v) => setState(() => _incomeStability = v),
         ),
         _textField(
           _emergencyFundMonthsCtrl,
@@ -1854,7 +1880,6 @@ if (resp.statusCode == 201) {
       m['relation']!.dispose();
     }
     for (final m in _goalCtrls) {
-      m['name']!.dispose();
       m['target_amount']!.dispose();
       m['horizon_years']!.dispose();
       m['suggested_strategy']!.dispose();
