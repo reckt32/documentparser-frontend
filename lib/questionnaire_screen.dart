@@ -101,12 +101,16 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   // Insurance (used for term insurance calculations)
   final _lifeCoverCtrl = TextEditingController();
   final _healthCoverCtrl = TextEditingController();
+  // Insurance confirmation checkboxes
+  bool _hasTermInsuranceConfirmed = false;
+  bool _hasHealthInsuranceConfirmed = false;
 
   // Lifestyle
   final _annualIncomeCtrl = TextEditingController();
   final _monthlyExpensesCtrl = TextEditingController();
   final _monthlyEmiCtrl = TextEditingController();
   final _emergencyFundCtrl = TextEditingController();
+  final _availableSavingsCtrl = TextEditingController();
   final _savingsPercentCtrl = TextEditingController();
   String _savingsBand = '';
   final List<String> _currentProducts = [];
@@ -355,6 +359,27 @@ if (resp.statusCode == 201) {
         final hc = insurancePrefill['health_cover'] ?? insFromAnalysis['healthCover'];
         if (hc != null) {
           _healthCoverCtrl.text = _fmtNum(hc);
+          appliedCount++;
+        }
+      }
+      // Insurance confirmation checkboxes prefill
+      final termConfirmed = insurancePrefill['has_term_insurance_confirmed'];
+      if (termConfirmed != null && termConfirmed is bool) {
+        _hasTermInsuranceConfirmed = termConfirmed;
+        appliedCount++;
+      }
+      final healthConfirmed = insurancePrefill['has_health_insurance_confirmed'];
+      if (healthConfirmed != null && healthConfirmed is bool) {
+        _hasHealthInsuranceConfirmed = healthConfirmed;
+        appliedCount++;
+      }
+
+      // Available savings prefill from lifestyle
+      if (_availableSavingsCtrl.text.trim().isEmpty) {
+        final avs = lifestyle['available_savings'];
+        if (avs != null) {
+          _availableSavingsCtrl.text = _fmtNum(avs);
+          print('[_applyPrefill] Prefilled available savings: ${_availableSavingsCtrl.text}');
           appliedCount++;
         }
       }
@@ -617,11 +642,20 @@ if (resp.statusCode == 201) {
         });
         break;
       case 4:
+        await _saveSection('insurance', {
+          'life_cover': _lifeCoverCtrl.text.trim(),
+          'health_cover': _healthCoverCtrl.text.trim(),
+          'has_term_insurance_confirmed': _hasTermInsuranceConfirmed,
+          'has_health_insurance_confirmed': _hasHealthInsuranceConfirmed,
+        });
+        break;
+      case 5:
         await _saveSection('lifestyle', {
           'annual_income': _annualIncomeCtrl.text.trim(),
           'monthly_expenses': _monthlyExpensesCtrl.text.trim(),
           'monthly_emi': _monthlyEmiCtrl.text.trim(),
           'emergency_fund': _emergencyFundCtrl.text.trim(),
+          'available_savings': _availableSavingsCtrl.text.trim(),
           'savings_percent': _savingsPercentCtrl.text.trim(),
           'savings_band': _savingsBand,
           'products': _currentProducts,
@@ -631,7 +665,7 @@ if (resp.statusCode == 201) {
           },
         });
         break;
-      case 5:
+      case 6:
         await _saveSection('estate', {
           'will_status': _willStatus,
           'nominees': _nomineeCtrls
@@ -1254,6 +1288,48 @@ if (resp.statusCode == 201) {
   }
 
 
+  Widget _buildInsurance() {
+    return _sectionCard(
+      title: 'Insurance Coverage',
+      children: [
+        _textField(
+          _lifeCoverCtrl,
+          'Term Life Cover (₹)',
+          keyboard: TextInputType.number,
+        ),
+        CheckboxListTile(
+          title: const Text('I already have term life insurance'),
+          subtitle: const Text('Check if you have adequate life cover'),
+          value: _hasTermInsuranceConfirmed,
+          onChanged: (v) => setState(() => _hasTermInsuranceConfirmed = v ?? false),
+          controlAffinity: ListTileControlAffinity.leading,
+        ),
+        const SizedBox(height: 8),
+        _textField(
+          _healthCoverCtrl,
+          'Health Cover (₹)',
+          keyboard: TextInputType.number,
+        ),
+        CheckboxListTile(
+          title: const Text('I already have health insurance'),
+          subtitle: const Text('Check if you have adequate health cover'),
+          value: _hasHealthInsuranceConfirmed,
+          onChanged: (v) => setState(() => _hasHealthInsuranceConfirmed = v ?? false),
+          controlAffinity: ListTileControlAffinity.leading,
+        ),
+        _saveButton(() {
+          _saveSection('insurance', {
+            'life_cover': _lifeCoverCtrl.text.trim(),
+            'health_cover': _healthCoverCtrl.text.trim(),
+            'has_term_insurance_confirmed': _hasTermInsuranceConfirmed,
+            'has_health_insurance_confirmed': _hasHealthInsuranceConfirmed,
+          });
+        }),
+      ],
+    );
+  }
+
+
   Widget _buildLifestyle() {
     return _sectionCard(
       title: 'Lifestyle & Allocation',
@@ -1276,6 +1352,11 @@ if (resp.statusCode == 201) {
         _textField(
           _emergencyFundCtrl,
           'Emergency Fund (₹)',
+          keyboard: TextInputType.number,
+        ),
+        _textField(
+          _availableSavingsCtrl,
+          'Available Savings for Investments/Insurance (₹)',
           keyboard: TextInputType.number,
         ),
         _textField(
@@ -1332,6 +1413,7 @@ if (resp.statusCode == 201) {
             'monthly_expenses': _monthlyExpensesCtrl.text.trim(),
             'monthly_emi': _monthlyEmiCtrl.text.trim(),
             'emergency_fund': _emergencyFundCtrl.text.trim(),
+            'available_savings': _availableSavingsCtrl.text.trim(),
             'savings_percent': _savingsPercentCtrl.text.trim(),
             'savings_band': _savingsBand,
             'products': _currentProducts,
@@ -1597,6 +1679,7 @@ if (resp.statusCode == 201) {
       _buildFamilyInfo(),
       _buildGoals(),
       _buildRiskProfile(),
+      _buildInsurance(),
       _buildLifestyle(),
       _buildEstate(),
     ];
