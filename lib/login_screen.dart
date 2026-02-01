@@ -1,292 +1,190 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:frontend/constants.dart';
+import 'package:provider/provider.dart';
 import 'package:frontend/app_theme.dart';
+import 'package:frontend/services/auth_service.dart';
 
+/// Login Screen
+/// 
+/// Simple Google Sign-In only, optimized for web browsers.
 class LoginScreen extends StatefulWidget {
-  final VoidCallback onLoginSuccess;
-
-  const LoginScreen({super.key, required this.onLoginSuccess});
+  const LoginScreen({super.key});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _usernameController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
-  String _errorMessage = '';
+  String? _errorMessage;
 
-  Future<void> _login() async {
+  Future<void> _signInWithGoogle() async {
     setState(() {
       _isLoading = true;
-      _errorMessage = '';
+      _errorMessage = null;
     });
 
     try {
-      final response = await http.post(
-        Uri.parse('$kBackendUrl/login'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'username': _usernameController.text,
-          'password': _passwordController.text,
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        // Login successful
-        widget.onLoginSuccess();
-      } else {
-        // Login failed
-        final errorData = json.decode(response.body);
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final success = await authService.signInWithGoogle();
+      
+      if (!success && mounted) {
         setState(() {
-          _errorMessage = errorData['message'] ?? 'Login failed. Please try again.';
+          _errorMessage = 'Sign-in failed. Please try again.';
         });
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Error: Could not connect to the server.';
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Sign-in failed: ${e.toString()}';
+        });
+      }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
-  }
-
-  @override
-  void dispose() {
-    _usernameController.dispose();
-    _passwordController.dispose();
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final isWideScreen = size.width > 800;
 
     return Scaffold(
-      body: isWideScreen
-          ? Row(
-              children: [
-                // Left branding panel
-                Expanded(
-                  flex: 5,
-                  child: _buildBrandingPanel(),
-                ),
-                // Right login form
-                Expanded(
-                  flex: 5,
-                  child: _buildLoginForm(context),
-                ),
-              ],
-            )
-          : _buildLoginForm(context),
-    );
-  }
-
-  Widget _buildBrandingPanel() {
-    return Container(
-      color: AppTheme.primaryNavy,
-      padding: const EdgeInsets.all(60),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Primary logo
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 80, maxWidth: 200),
-            child: Image.asset(
-              'assets/primarylogo.png',
-              fit: BoxFit.contain,
-            ),
-          ),
-          const SizedBox(height: 32),
-          // Gold accent bar
-          AppTheme.goldAccentBar(width: 80, height: 3),
-          const SizedBox(height: 40),
-          // Split typography - "Financial Intelligence"
-          Text(
-            'Financial',
-            style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                  color: Colors.white,
-                  height: 0.9,
-                ),
-          ),
-          Text(
-            'Intelligence',
-            style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                  color: AppTheme.accentGold,
-                  height: 0.9,
-                ),
-          ),
-          const SizedBox(height: 32),
-          Text(
-            'Parse, analyze, and optimize your financial documents with precision and clarity.',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.9),
-                  fontSize: 16,
-                  height: 1.6,
-                ),
-          ),
-          const SizedBox(height: 60),
-          // Feature points with gold accent
-          _buildFeaturePoint('Document analysis powered by advanced technology'),
-          const SizedBox(height: 16),
-          _buildFeaturePoint('Automated financial insights and recommendations'),
-          const SizedBox(height: 16),
-          _buildFeaturePoint('Secure, professional-grade data handling'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFeaturePoint(String text) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 6,
-          height: 6,
-          margin: const EdgeInsets.only(top: 8),
-          decoration: const BoxDecoration(
-            color: AppTheme.accentGold,
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            text,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.85),
-                  height: 1.6,
-                ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLoginForm(BuildContext context) {
-    return Container(
-      color: AppTheme.backgroundCream,
-      child: Center(
+      backgroundColor: AppTheme.backgroundCream,
+      body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 40),
+          padding: const EdgeInsets.all(32),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
+            constraints: const BoxConstraints(maxWidth: 420),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Title
-                Text(
-                  'Welcome Back',
-                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                        color: AppTheme.primaryNavy,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                AppTheme.goldAccentBar(width: 60, height: 2),
-                const SizedBox(height: 16),
-                Text(
-                  'Login to your account to continue',
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
-                const SizedBox(height: 48),
-
-                // Username field
-                Text(
-                  'USERNAME',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: AppTheme.textDark,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.0,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _usernameController,
-                  decoration: const InputDecoration(
-                    hintText: 'Enter your username',
+                // Logo
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryNavy,
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  keyboardType: TextInputType.text,
-                ),
-                const SizedBox(height: 24),
-
-                // Password field
-                Text(
-                  'PASSWORD',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: AppTheme.textDark,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.0,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _passwordController,
-                  decoration: const InputDecoration(
-                    hintText: 'Enter your password',
+                  child: const Icon(
+                    Icons.assessment_outlined,
+                    color: Colors.white,
+                    size: 40,
                   ),
-                  obscureText: true,
                 ),
                 const SizedBox(height: 32),
 
+                // Title
+                Text(
+                  'Financial Report',
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        color: AppTheme.primaryNavy,
+                        fontWeight: FontWeight.bold,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+
+                // Subtitle
+                Text(
+                  'AI-powered insights for your finances',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: AppTheme.textLight,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 48),
+
                 // Error message
-                if (_errorMessage.isNotEmpty)
+                if (_errorMessage != null)
                   Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(12),
                     margin: const EdgeInsets.only(bottom: 24),
                     decoration: BoxDecoration(
                       color: AppTheme.errorRed.withValues(alpha: 0.1),
-                      border: Border(
-                        left: BorderSide(
-                          color: AppTheme.errorRed,
-                          width: 3,
-                        ),
-                      ),
+                      borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
                       children: [
-                        Icon(
+                        const Icon(
                           Icons.error_outline,
                           color: AppTheme.errorRed,
                           size: 20,
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            _errorMessage,
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: AppTheme.errorRed,
-                                ),
+                            _errorMessage!,
+                            style: const TextStyle(
+                              color: AppTheme.errorRed,
+                              fontSize: 14,
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
 
-                // Login button
+                // Google Sign-In Button
                 SizedBox(
                   width: double.infinity,
                   height: 52,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _login,
+                  child: OutlinedButton(
+                    onPressed: _isLoading ? null : _signInWithGoogle,
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      side: const BorderSide(color: AppTheme.borderLight),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
                     child: _isLoading
                         ? const SizedBox(
-                            width: 20,
-                            height: 20,
+                            width: 24,
+                            height: 24,
                             child: CircularProgressIndicator(
-                              color: Colors.white,
                               strokeWidth: 2,
                             ),
                           )
-                        : const Text('Login'),
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Image.network(
+                                'https://www.google.com/favicon.ico',
+                                width: 20,
+                                height: 20,
+                                errorBuilder: (_, __, ___) => const Icon(
+                                  Icons.g_mobiledata,
+                                  size: 24,
+                                  color: AppTheme.primaryNavy,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                'Continue with Google',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppTheme.textDark,
+                                ),
+                              ),
+                            ],
+                          ),
                   ),
+                ),
+                const SizedBox(height: 32),
+
+                // Footer text
+                Text(
+                  'By continuing, you agree to our Terms of Service',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppTheme.textLight,
+                      ),
+                  textAlign: TextAlign.center,
                 ),
               ],
             ),

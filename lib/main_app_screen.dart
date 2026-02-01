@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:frontend/upload_screen.dart';
 import 'package:frontend/questionnaire_screen.dart';
 import 'package:frontend/constants.dart';
 import 'package:frontend/home_screen.dart';
 import 'package:frontend/app_theme.dart';
+import 'package:frontend/services/auth_service.dart';
 
 class MainAppScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -91,52 +93,68 @@ class _MainAppScreenState extends State<MainAppScreen> {
         foregroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      drawer: Drawer(
-        backgroundColor: Colors.white,
-        child: Column(
-          children: <Widget>[
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(32),
-              decoration: const BoxDecoration(
-                color: AppTheme.primaryNavy,
-              ),
-              child: SafeArea(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: AppTheme.accentGold,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                      child: const Icon(
-                        Icons.person,
-                        size: 32,
-                        color: AppTheme.primaryNavy,
-                      ),
+      drawer: Builder(
+        builder: (context) {
+          final authService = Provider.of<AuthService>(context);
+          return Drawer(
+            backgroundColor: Colors.white,
+            child: Column(
+              children: <Widget>[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(32),
+                  decoration: const BoxDecoration(
+                    color: AppTheme.primaryNavy,
+                  ),
+                  child: SafeArea(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            color: AppTheme.accentGold,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                          child: authService.photoUrl != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(2),
+                                  child: Image.network(
+                                    authService.photoUrl!,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => const Icon(
+                                      Icons.person,
+                                      size: 32,
+                                      color: AppTheme.primaryNavy,
+                                    ),
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.person,
+                                  size: 32,
+                                  color: AppTheme.primaryNavy,
+                                ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          authService.displayName ?? 'User',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          authService.email ?? '',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.8),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'User Name',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'user@example.com',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.8),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 16),
@@ -193,6 +211,8 @@ class _MainAppScreenState extends State<MainAppScreen> {
             ),
           ],
         ),
+      );
+        },
       ),
       body: _screens()[_selectedIndex],
     );
