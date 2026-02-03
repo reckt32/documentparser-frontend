@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:frontend/app_theme.dart';
+import 'package:frontend/services/auth_service.dart';
 
 /// Predefined goal types for financial planning
 const List<String> kGoalTypes = [
@@ -694,9 +696,22 @@ if (resp.statusCode == 201) {
       _planUrl = null;
     });
     try {
+      // Get auth token for authorized request
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final token = await authService.getIdToken();
+      if (token == null) {
+        setState(() {
+          _statusMessage = 'Not authenticated. Please log in again.';
+        });
+        return;
+      }
+
       final resp = await http.post(
         Uri.parse('${widget.backendUrl}/report/generate'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
         body: jsonEncode({'questionnaire_id': _qid, 'useLLM': true}),
       );
       if (resp.statusCode == 200) {
