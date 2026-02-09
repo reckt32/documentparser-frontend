@@ -64,6 +64,17 @@ class PaymentService {
     final response = await _apiService.post('/payment/create-order', {});
     
     if (!response.success) {
+      // Check if already paid - this means our local state is stale
+      if (response.statusCode == 400 && 
+          response.data?['error'] == 'Already paid') {
+        debugPrint('Backend says already paid - syncing state');
+        // Update local auth state immediately
+        _authService.markAsPaid();
+        // Also trigger a full refresh from backend to ensure consistency
+        await _authService.forceRefreshPaymentStatus();
+        onSuccess('already_paid');
+        return true;
+      }
       onError(response.errorMessage ?? 'Failed to create order');
       return false;
     }

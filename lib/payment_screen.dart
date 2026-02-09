@@ -17,7 +17,29 @@ class PaymentScreen extends StatefulWidget {
 
 class _PaymentScreenState extends State<PaymentScreen> {
   bool _isProcessing = false;
+  bool _isCheckingStatus = true;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPaymentStatus();
+  }
+
+  /// Check payment status on screen init to handle edge cases
+  /// where local state is out of sync with backend
+  Future<void> _checkPaymentStatus() async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    
+    // Force refresh from backend to ensure we have latest status
+    await authService.forceRefreshPaymentStatus();
+    
+    if (mounted) {
+      setState(() {
+        _isCheckingStatus = false;
+      });
+    }
+  }
 
   Future<void> _startPayment() async {
     setState(() {
@@ -67,6 +89,26 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
     final size = MediaQuery.of(context).size;
+
+    // Show loading while checking payment status with backend
+    if (_isCheckingStatus || authService.isSyncing) {
+      return Scaffold(
+        backgroundColor: AppTheme.backgroundCream,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(color: AppTheme.primaryNavy),
+              const SizedBox(height: 16),
+              Text(
+                'Verifying payment status...',
+                style: TextStyle(color: AppTheme.textLight, fontSize: 14),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundCream,
@@ -187,7 +229,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       _buildFeatureItem('Tax optimization insights'),
                       const SizedBox(height: 28),
 
-                      // Error message
+                      // Error message with retry option
                       if (_errorMessage != null)
                         Container(
                           padding: const EdgeInsets.all(12),
@@ -196,20 +238,37 @@ class _PaymentScreenState extends State<PaymentScreen> {
                             color: AppTheme.errorRed.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(
-                                Icons.error_outline,
-                                color: AppTheme.errorRed,
-                                size: 18,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  _errorMessage!,
-                                  style: const TextStyle(
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.error_outline,
                                     color: AppTheme.errorRed,
-                                    fontSize: 13,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _errorMessage!,
+                                      style: const TextStyle(
+                                        color: AppTheme.errorRed,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              GestureDetector(
+                                onTap: _checkPaymentStatus,
+                                child: Text(
+                                  'Already paid? Tap here to check status',
+                                  style: TextStyle(
+                                    color: AppTheme.primaryNavy,
+                                    fontSize: 12,
+                                    decoration: TextDecoration.underline,
                                   ),
                                 ),
                               ),

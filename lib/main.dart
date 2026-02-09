@@ -86,6 +86,44 @@ class AuthWrapper extends StatelessWidget {
           );
         }
 
+        // Show error state with retry if sync failed but user is authenticated
+        if (authService.error != null && authService.isAuthenticated) {
+          return Scaffold(
+            backgroundColor: AppTheme.backgroundCream,
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.cloud_off,
+                    size: 48,
+                    color: AppTheme.textLight,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    authService.error!,
+                    style: TextStyle(
+                      color: AppTheme.textLight,
+                      fontSize: 14,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () => authService.retrySync(),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryNavy,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
         // User is not logged in - show login screen
         if (!authService.isAuthenticated) {
           return const LoginScreen();

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -85,15 +86,20 @@ class AuthService extends ChangeNotifier {
     if (_firebaseUser == null) return;
 
     _isSyncing = true;
+    _error = null;
     notifyListeners();
 
     try {
       _idToken = await _firebaseUser!.getIdToken();
       
+      // Add timeout to prevent infinite loading
       final response = await http.post(
         Uri.parse('$kBackendUrl/auth/verify'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'id_token': _idToken}),
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw TimeoutException('Backend sync timed out'),
       );
 
       if (response.statusCode == 200) {
@@ -104,9 +110,104 @@ class AuthService extends ChangeNotifier {
         _error = 'Failed to sync with backend';
         debugPrint('Backend sync failed: ${response.body}');
       }
+    } on TimeoutException {
+      _error = 'Connection timed out. Tap to retry.';
+      debugPrint('Backend sync timed out');
     } catch (e) {
-      _error = 'Network error: $e';
+      _error = 'Network error. Tap to retry.';
       debugPrint('Backend sync error: $e');
+    } finally {
+      _isSyncing = false;
+      notifyListeners();
+    }
+  }
+
+  /// Retry backend sync (called when user taps retry)
+  Future<void> retrySync() async {
+    await _syncWithBackend();
+  }
+
+  /// Force refresh payment status with reconciliation fallback
+  /// 
+  /// Calls /auth/status first. If that shows unpaid, calls /payment/reconcile
+  /// to check Razorpay directly and recover if payment exists.
+  Future<void> forceRefreshPaymentStatus() async {
+    if (_firebaseUser == null) return;
+
+    _isSyncing = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final token = await getIdToken(forceRefresh: true);
+      if (token == null) {
+        _error = 'Authentication failed';
+        return;
+      }
+
+      // First, get current status from backend
+      var response = await http.get(
+        Uri.parse('$kBackendUrl/auth/status'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final hasPaidFromServer = data['user']?['has_paid'] ?? false;
+
+        if (hasPaidFromServer) {
+          _appUser = AppUser.fromJson(data['user']);
+          _error = null;
+          return;
+        }
+
+        // Server says unpaid - try reconciliation with Razorpay
+        debugPrint('Server shows unpaid, attempting reconciliation...');
+        response = await http.post(
+          Uri.parse('$kBackendUrl/payment/reconcile'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        ).timeout(const Duration(seconds: 15));
+
+        if (response.statusCode == 200) {
+          final reconcileData = json.decode(response.body);
+          if (reconcileData['has_paid'] == true) {
+            // Reconciliation found payment - update local state
+            debugPrint('Reconciliation found payment! Updating state.');
+            _appUser = AppUser(
+              firebaseUid: _appUser!.firebaseUid,
+              email: _appUser!.email,
+              displayName: _appUser!.displayName,
+              hasPaid: true,
+              paymentDate: reconcileData['payment_date'] ?? DateTime.now().toIso8601String(),
+            );
+          } else {
+            // Update app user from current status (unpaid confirmed)
+            final statusData = json.decode((await http.get(
+              Uri.parse('$kBackendUrl/auth/status'),
+              headers: {
+                'Authorization': 'Bearer $token',
+                'Content-Type': 'application/json',
+              },
+            )).body);
+            _appUser = AppUser.fromJson(statusData['user']);
+          }
+          _error = null;
+        }
+      } else {
+        _error = 'Failed to check status';
+      }
+    } on TimeoutException {
+      _error = 'Connection timed out';
+      debugPrint('forceRefreshPaymentStatus timed out');
+    } catch (e) {
+      _error = 'Failed to refresh status: $e';
+      debugPrint('forceRefreshPaymentStatus error: $e');
     } finally {
       _isSyncing = false;
       notifyListeners();
