@@ -130,6 +130,7 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   final List<Map<String, TextEditingController>> _nomineeCtrls = [];
 
   bool _loading = false;
+  bool _isGeneratingReport = false;
   String _statusMessage = '';
 
   @override
@@ -692,6 +693,7 @@ if (resp.statusCode == 201) {
       return;
     }
     setState(() {
+      _isGeneratingReport = true;
       _statusMessage = 'Generating financial report...';
       _planUrl = null;
     });
@@ -701,6 +703,7 @@ if (resp.statusCode == 201) {
       final token = await authService.getIdToken();
       if (token == null) {
         setState(() {
+          _isGeneratingReport = false;
           _statusMessage = 'Not authenticated. Please log in again.';
         });
         return;
@@ -716,17 +719,36 @@ if (resp.statusCode == 201) {
       );
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body);
+        final pdfUrl = data['financial_plan_pdf_url'] as String?;
+        final remainingCredits = data['remaining_credits'] ?? 0;
         setState(() {
-          _planUrl = data['financial_plan_pdf_url'] as String?;
-          _statusMessage = 'Report ready.';
+          _isGeneratingReport = false;
+          _planUrl = pdfUrl;
+          _statusMessage = 'Report ready! Credits remaining: $remainingCredits';
         });
+        // Auto-open the PDF in a new tab
+        if (pdfUrl != null) {
+          final uri = Uri.parse(pdfUrl);
+          await launchUrl(uri, webOnlyWindowName: '_blank');
+        }
+        // Refresh auth state to update credit count across the app
+        await authService.refreshPaymentStatus();
+      } else if (resp.statusCode == 402) {
+        setState(() {
+          _isGeneratingReport = false;
+          _statusMessage = 'No report credits remaining. Redirecting to payment...';
+        });
+        // Refresh payment status so AuthWrapper redirects to PaymentScreen
+        await authService.refreshPaymentStatus();
       } else {
         setState(() {
+          _isGeneratingReport = false;
           _statusMessage = 'Failed: ${resp.statusCode} ${resp.body}';
         });
       }
     } catch (e) {
       setState(() {
+        _isGeneratingReport = false;
         _statusMessage = 'Error: $e';
       });
     }
@@ -1708,50 +1730,140 @@ if (resp.statusCode == 201) {
       body:
           _qid == null
               ? _buildIntroScreen(context)
-              : Column(
+              : Stack(
                 children: [
-                  _progressIndicator(steps.length),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
-                      child: steps[_stepIndex],
-                    ),
-                  ),
-                  _navigationBar(steps.length),
-                  if (_stepIndex == steps.length - 1)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                      child: Row(
+                  // Main questionnaire content
+                  AbsorbPointer(
+                    absorbing: _isGeneratingReport,
+                    child: Opacity(
+                      opacity: _isGeneratingReport ? 0.3 : 1.0,
+                      child: Column(
                         children: [
+                          _progressIndicator(steps.length),
                           Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: _loading ? null : () async {
-                                await _autoSaveCurrentSection();
-                                await _generateReport();
-                              },
-                              icon: const Icon(Icons.picture_as_pdf),
-                              label: const Text('Get Financial Report'),
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
+                              child: steps[_stepIndex],
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          if (_planUrl != null)
-                            ElevatedButton.icon(
-                              onPressed: _openPlan,
-                              icon: const Icon(Icons.open_in_new),
-                              label: const Text('Open PDF'),
+                          _navigationBar(steps.length),
+                          if (_stepIndex == steps.length - 1)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                              child: _planUrl != null
+                                // Report is ready - show Open PDF + Edit option
+                                ? Row(
+                                    children: [
+                                      Expanded(
+                                        child: ElevatedButton.icon(
+                                          onPressed: _openPlan,
+                                          icon: const Icon(Icons.open_in_new),
+                                          label: const Text('Open PDF'),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: AppTheme.successGreen,
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(vertical: 14),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      OutlinedButton.icon(
+                                        onPressed: () {
+                                          setState(() {
+                                            _stepIndex = 0;
+                                            _planUrl = null;
+                                            _statusMessage = '';
+                                          });
+                                        },
+                                        icon: const Icon(Icons.edit_note),
+                                        label: const Text('Edit & Regenerate'),
+                                      ),
+                                    ],
+                                  )
+                                // No report yet - show generate button
+                                : Row(
+                                    children: [
+                                      Expanded(
+                                        child: ElevatedButton.icon(
+                                          onPressed: (_loading || _isGeneratingReport) ? null : () async {
+                                            await _autoSaveCurrentSection();
+                                            await _generateReport();
+                                          },
+                                          icon: const Icon(Icons.picture_as_pdf),
+                                          label: const Text('Get Financial Report'),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                            ),
+                          if (_statusMessage.isNotEmpty && !_isGeneratingReport)
+                            Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Text(
+                                _statusMessage,
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: _statusMessage.contains('Error') || _statusMessage.contains('Failed')
+                                      ? AppTheme.errorRed
+                                      : AppTheme.successGreen,
+                                ),
+                              ),
                             ),
                         ],
                       ),
                     ),
-                  if (_statusMessage.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Text(
-                        _statusMessage,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: _statusMessage.contains('Error')
-                              ? AppTheme.errorRed
-                              : AppTheme.successGreen,
+                  ),
+                  // Full-screen loading overlay during report generation
+                  if (_isGeneratingReport)
+                    Container(
+                      color: AppTheme.primaryNavy.withValues(alpha: 0.85),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const SizedBox(
+                              width: 64,
+                              height: 64,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 3,
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                            Text(
+                              'Generating Your Financial Report',
+                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Our AI is analyzing your data and creating\npersonalized recommendations...',
+                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                color: Colors.white70,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 32),
+                            SizedBox(
+                              width: 260,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: const LinearProgressIndicator(
+                                  minHeight: 6,
+                                  backgroundColor: Colors.white24,
+                                  color: AppTheme.accentGold,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'This may take up to a minute',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Colors.white54,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),

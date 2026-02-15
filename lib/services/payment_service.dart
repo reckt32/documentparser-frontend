@@ -64,17 +64,6 @@ class PaymentService {
     final response = await _apiService.post('/payment/create-order', {});
     
     if (!response.success) {
-      // Check if already paid - this means our local state is stale
-      if (response.statusCode == 400 && 
-          response.data?['error'] == 'Already paid') {
-        debugPrint('Backend says already paid - syncing state');
-        // Update local auth state immediately
-        _authService.markAsPaid();
-        // Also trigger a full refresh from backend to ensure consistency
-        await _authService.forceRefreshPaymentStatus();
-        onSuccess('already_paid');
-        return true;
-      }
       onError(response.errorMessage ?? 'Failed to create order');
       return false;
     }
@@ -91,7 +80,7 @@ class PaymentService {
       'amount': amount,
       'order_id': _currentOrderId,
       'name': 'Financial Report',
-      'description': 'Lifetime access to financial report generation',
+      'description': '3 Financial Reports',
       'prefill': {
         'email': userEmail,
       },
@@ -165,10 +154,13 @@ class PaymentService {
         paymentId: response.data['payment_id'],
         paymentDate: response.data['payment_date'],
         pricePaise: response.data['report_price_paise'] ?? 49900,
+        remainingCredits: response.data['remaining_credits'] ?? 0,
+        canGenerateReport: response.data['can_generate_report'] ?? false,
+        creditsPerPayment: response.data['credits_per_payment'] ?? 3,
       );
     }
     
-    return PaymentStatus(hasPaid: false, pricePaise: 49900);
+    return PaymentStatus(hasPaid: false, pricePaise: 49900, remainingCredits: 0);
   }
 }
 
@@ -178,12 +170,18 @@ class PaymentStatus {
   final String? paymentId;
   final String? paymentDate;
   final int pricePaise;
+  final int remainingCredits;
+  final bool canGenerateReport;
+  final int creditsPerPayment;
 
   PaymentStatus({
     required this.hasPaid,
     this.paymentId,
     this.paymentDate,
     required this.pricePaise,
+    this.remainingCredits = 0,
+    this.canGenerateReport = false,
+    this.creditsPerPayment = 3,
   });
 
   /// Get formatted price in rupees
@@ -191,4 +189,7 @@ class PaymentStatus {
     final rupees = pricePaise / 100;
     return '₹${rupees.toStringAsFixed(0)}';
   }
+  
+  /// Check if user needs to pay to generate reports
+  bool get needsPayment => remainingCredits <= 0;
 }

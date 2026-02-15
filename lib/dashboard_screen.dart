@@ -49,6 +49,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _planUrl = data['financial_plan_pdf_url'] as String?;
           _status = 'Financial plan generated.';
         });
+      } else if (resp.statusCode == 402) {
+        setState(() {
+          _status = 'No report credits remaining. Please purchase more credits to generate reports.';
+        });
       } else {
         setState(() {
           _status = 'Failed: ${resp.statusCode} ${resp.body}';

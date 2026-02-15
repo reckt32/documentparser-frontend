@@ -57,7 +57,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           });
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Payment successful! Welcome aboard.'),
+              content: Text('Payment successful! 3 report credits added.'),
               backgroundColor: Colors.green,
             ),
           );
@@ -146,7 +146,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'One step to unlock your financial insights',
+                  authService.hasPaid
+                      ? 'Purchase more report credits to continue'
+                      : 'One step to unlock your financial insights',
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         color: AppTheme.textLight,
                       ),
@@ -181,7 +183,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: const Text(
-                          'LIFETIME ACCESS',
+                          '3 REPORTS',
                           style: TextStyle(
                             color: AppTheme.accentGold,
                             fontWeight: FontWeight.bold,
@@ -214,7 +216,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         ],
                       ),
                       Text(
-                        'one-time payment',
+                        'per 3 reports',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                               color: AppTheme.textLight,
                             ),
@@ -222,7 +224,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       const SizedBox(height: 28),
 
                       // Features list
-                      _buildFeatureItem('Unlimited financial reports'),
+                      _buildFeatureItem('3 comprehensive financial reports'),
                       _buildFeatureItem('AI-powered document analysis'),
                       _buildFeatureItem('Personalized recommendations'),
                       _buildFeatureItem('Goal planning & tracking'),

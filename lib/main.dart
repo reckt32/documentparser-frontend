@@ -129,12 +129,12 @@ class AuthWrapper extends StatelessWidget {
           return const LoginScreen();
         }
 
-        // User is logged in but hasn't paid - show payment screen
-        if (!authService.hasPaid) {
+        // User has no report credits - show payment screen
+        if (!authService.hasCredits) {
           return const PaymentScreen();
         }
 
-        // User is authenticated and has paid - show main app
+        // User is authenticated and has credits - show main app
         return MainAppScreen(
           onLogout: () async {
             await authService.signOut();

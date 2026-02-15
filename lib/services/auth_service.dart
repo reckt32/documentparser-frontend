@@ -13,6 +13,7 @@ class AppUser {
   final String? displayName;
   final bool hasPaid;
   final String? paymentDate;
+  final int reportCredits;
 
   AppUser({
     required this.firebaseUid,
@@ -20,6 +21,7 @@ class AppUser {
     this.displayName,
     this.hasPaid = false,
     this.paymentDate,
+    this.reportCredits = 0,
   });
 
   factory AppUser.fromJson(Map<String, dynamic> json) {
@@ -29,6 +31,7 @@ class AppUser {
       displayName: json['display_name'],
       hasPaid: json['has_paid'] ?? false,
       paymentDate: json['payment_date'],
+      reportCredits: json['report_credits'] ?? 0,
     );
   }
 }
@@ -56,6 +59,8 @@ class AuthService extends ChangeNotifier {
   AppUser? get appUser => _appUser;
   bool get isAuthenticated => _firebaseUser != null;
   bool get hasPaid => _appUser?.hasPaid ?? false;
+  bool get hasCredits => (_appUser?.reportCredits ?? 0) > 0;
+  int get reportCredits => _appUser?.reportCredits ?? 0;
   bool get isLoading => _isLoading;
   bool get isSyncing => _isSyncing;  // True while syncing with backend
   String? get error => _error;
@@ -348,7 +353,7 @@ class AuthService extends ChangeNotifier {
   }
 
   /// Mark user as paid (called after successful payment)
-  void markAsPaid() {
+  void markAsPaid({int creditsAdded = 3}) {
     if (_appUser != null) {
       _appUser = AppUser(
         firebaseUid: _appUser!.firebaseUid,
@@ -356,6 +361,7 @@ class AuthService extends ChangeNotifier {
         displayName: _appUser!.displayName,
         hasPaid: true,
         paymentDate: DateTime.now().toIso8601String(),
+        reportCredits: _appUser!.reportCredits + creditsAdded,
       );
       notifyListeners();
     }
