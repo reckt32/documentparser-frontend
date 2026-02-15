@@ -99,30 +99,45 @@ class PaymentService {
   }
 
   /// Handle successful payment from Razorpay
+  ///
+  /// Razorpay's success callback is authoritative — the payment IS captured.
+  /// We update local state immediately so the UI navigates, then verify
+  /// with the backend and refresh from server to ensure consistency.
   void _handlePaymentSuccess(PaymentSuccessResponse response) async {
     debugPrint('Payment success: ${response.paymentId}');
     
-    // Verify payment with backend
-    final verifyResponse = await _apiService.post('/payment/verify', {
-      'order_id': response.orderId ?? _currentOrderId,
-      'payment_id': response.paymentId,
-      'signature': response.signature,
-    });
-
-    if (verifyResponse.success) {
-      // Update local auth state
+    try {
+      // Update local state IMMEDIATELY — don't wait for backend verify.
+      // Razorpay only fires this callback when payment is captured.
       _authService.markAsPaid();
       _onSuccess?.call(response.paymentId ?? '');
-    } else {
-      // Verify call failed — but webhook may have already processed the payment.
-      // Refresh from backend to pick up webhook-processed payment.
-      debugPrint('Verify failed, refreshing status from backend...');
-      await _authService.forceRefreshPaymentStatus();
-      if (_authService.hasCredits) {
-        _onSuccess?.call(response.paymentId ?? '');
-      } else {
-        _onError?.call(verifyResponse.errorMessage ?? 'Payment verification failed');
+      
+      // Verify with backend (blocking) then refresh state from server
+      try {
+        final verifyResponse = await _apiService.post('/payment/verify', {
+          'order_id': response.orderId ?? _currentOrderId,
+          'payment_id': response.paymentId,
+          'signature': response.signature,
+        });
+        
+        if (verifyResponse.success) {
+          debugPrint('Backend verification confirmed');
+        } else {
+          debugPrint('Backend verify failed (webhook will handle): ${verifyResponse.errorMessage}');
+        }
+      } catch (e) {
+        debugPrint('Backend verify error (webhook will handle): $e');
       }
+      
+      // Always refresh from server to ensure credits are synced
+      await _authService.refreshPaymentStatus();
+    } catch (e) {
+      debugPrint('Error in payment success handler: $e');
+      // Even on error, try to refresh from server as last resort
+      try {
+        await _authService.refreshPaymentStatus();
+      } catch (_) {}
+      _onError?.call('Payment processing error. Please check your payment status.');
     }
   }
 

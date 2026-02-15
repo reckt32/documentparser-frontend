@@ -103,7 +103,7 @@ class AuthService extends ChangeNotifier {
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'id_token': _idToken}),
       ).timeout(
-        const Duration(seconds: 10),
+        const Duration(seconds: 30),
         onTimeout: () => throw TimeoutException('Backend sync timed out'),
       );
 
@@ -157,7 +157,7 @@ class AuthService extends ChangeNotifier {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
