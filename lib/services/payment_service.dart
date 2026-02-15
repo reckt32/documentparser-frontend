@@ -114,7 +114,15 @@ class PaymentService {
       _authService.markAsPaid();
       _onSuccess?.call(response.paymentId ?? '');
     } else {
-      _onError?.call(verifyResponse.errorMessage ?? 'Payment verification failed');
+      // Verify call failed — but webhook may have already processed the payment.
+      // Refresh from backend to pick up webhook-processed payment.
+      debugPrint('Verify failed, refreshing status from backend...');
+      await _authService.forceRefreshPaymentStatus();
+      if (_authService.hasCredits) {
+        _onSuccess?.call(response.paymentId ?? '');
+      } else {
+        _onError?.call(verifyResponse.errorMessage ?? 'Payment verification failed');
+      }
     }
   }
 

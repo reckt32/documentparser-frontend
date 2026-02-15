@@ -38,8 +38,8 @@ class MyApp extends StatelessWidget {
         
         // Payment service depends on both AuthService and ApiService
         ProxyProvider2<AuthService, ApiService, PaymentService>(
-          update: (_, authService, apiService, __) => 
-            PaymentService(authService, apiService),
+          update: (_, authService, apiService, previous) => 
+            previous ?? PaymentService(authService, apiService),
         ),
       ],
       child: MaterialApp(
