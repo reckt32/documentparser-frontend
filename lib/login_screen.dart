@@ -61,26 +61,18 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Logo
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryNavy,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Icon(
-                    Icons.assessment_outlined,
-                    color: Colors.white,
-                    size: 40,
-                  ),
-                ),
+              children: [ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 180, maxWidth: 360),
+            child: Image.asset(
+              'assets/primarylogo.png',
+              fit: BoxFit.contain,
+            ),
+          ),
                 const SizedBox(height: 32),
 
                 // Title
                 Text(
-                  'Financial Report',
+                  'Meerkat',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                         color: AppTheme.primaryNavy,
                         fontWeight: FontWeight.bold,

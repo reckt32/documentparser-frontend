@@ -43,7 +43,7 @@ class MyApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp(
-        title: 'Document Parser',
+        title: 'Meerkat',
         theme: AppTheme.theme,
         debugShowCheckedModeBanner: false,
         home: const AuthWrapper(),

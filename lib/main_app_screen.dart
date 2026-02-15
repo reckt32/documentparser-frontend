@@ -63,198 +63,303 @@ class _MainAppScreenState extends State<MainAppScreen> {
     ];
   }
 
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
+
+
+  // ---------------------------------------------------------------------------
+  // Profile popup (replaces drawer)
+  // ---------------------------------------------------------------------------
+
+  void _showProfilePopup(BuildContext context) {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final RenderBox button = context.findRenderObject() as RenderBox;
+    final RenderBox overlay =
+        Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
+    final offset = button.localToGlobal(Offset.zero, ancestor: overlay);
+
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        offset.dx + button.size.width - 260,
+        offset.dy + button.size.height + 4,
+        overlay.size.width - offset.dx - button.size.width,
+        0,
+      ),
+      constraints: const BoxConstraints(minWidth: 260, maxWidth: 300),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+      color: Colors.white,
+      elevation: 8,
+      items: [
+        // User info header (non-selectable)
+        PopupMenuItem<String>(
+          enabled: false,
+          padding: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Row(
+              children: [
+                // Avatar
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppTheme.accentGold,
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  child: authService.photoUrl != null
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(22),
+                          child: Image.network(
+                            authService.photoUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Icon(
+                              Icons.person,
+                              size: 24,
+                              color: AppTheme.primaryNavy,
+                            ),
+                          ),
+                        )
+                      : const Icon(
+                          Icons.person,
+                          size: 24,
+                          color: AppTheme.primaryNavy,
+                        ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        authService.displayName ?? 'User',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.primaryNavy,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        authService.email ?? '',
+                        style: const TextStyle(
+                          color: AppTheme.textLight,
+                          fontSize: 12,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // Divider
+        const PopupMenuItem<String>(
+          enabled: false,
+          height: 1,
+          padding: EdgeInsets.zero,
+          child: Divider(height: 1),
+        ),
+
+        // Credits
+        PopupMenuItem<String>(
+          enabled: false,
+          padding: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: AppTheme.accentGold.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(
+                    Icons.stars_rounded,
+                    size: 18,
+                    color: AppTheme.accentGold,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Report Credits',
+                        style: TextStyle(
+                          color: AppTheme.textLight,
+                          fontSize: 11,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${authService.reportCredits} remaining',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.primaryNavy,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // Divider
+        const PopupMenuItem<String>(
+          enabled: false,
+          height: 1,
+          padding: EdgeInsets.zero,
+          child: Divider(height: 1),
+        ),
+
+        // Logout
+        PopupMenuItem<String>(
+          value: 'logout',
+          padding: EdgeInsets.zero,
+          child: const Padding(
+            padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.logout_rounded,
+                  size: 20,
+                  color: AppTheme.errorRed,
+                ),
+                SizedBox(width: 12),
+                Text(
+                  'Logout',
+                  style: TextStyle(
+                    color: AppTheme.errorRed,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ).then((value) {
+      if (value == 'logout') {
+        widget.onLogout();
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final authService = Provider.of<AuthService>(context);
+
     return Scaffold(
       backgroundColor: AppTheme.backgroundCream,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: Row(
           children: [
             Text(
-              'Document',
+              'Meerkat',
               style: Theme.of(context).appBarTheme.titleTextStyle,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              'Parser',
-              style: Theme.of(context).appBarTheme.titleTextStyle?.copyWith(
-                color: AppTheme.accentGold,
-              ),
             ),
           ],
         ),
         backgroundColor: AppTheme.primaryNavy,
         foregroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      drawer: Builder(
-        builder: (context) {
-          final authService = Provider.of<AuthService>(context);
-          return Drawer(
-            backgroundColor: Colors.white,
-            child: Column(
-              children: <Widget>[
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(32),
-                  decoration: const BoxDecoration(
-                    color: AppTheme.primaryNavy,
-                  ),
-                  child: SafeArea(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+        actions: [
+          // Profile button
+          Builder(
+            builder: (buttonContext) {
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () => _showProfilePopup(buttonContext),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
+                        // Credits badge
                         Container(
-                          width: 60,
-                          height: 60,
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppTheme.accentGold.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.stars_rounded,
+                                size: 14,
+                                color: AppTheme.accentGold,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${authService.reportCredits}',
+                                style: const TextStyle(
+                                  color: AppTheme.accentGold,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Avatar
+                        Container(
+                          width: 32,
+                          height: 32,
                           decoration: BoxDecoration(
                             color: AppTheme.accentGold,
-                            borderRadius: BorderRadius.circular(2),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.3),
+                              width: 1.5,
+                            ),
                           ),
                           child: authService.photoUrl != null
                               ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(2),
+                                  borderRadius: BorderRadius.circular(16),
                                   child: Image.network(
                                     authService.photoUrl!,
                                     fit: BoxFit.cover,
                                     errorBuilder: (_, __, ___) => const Icon(
                                       Icons.person,
-                                      size: 32,
+                                      size: 18,
                                       color: AppTheme.primaryNavy,
                                     ),
                                   ),
                                 )
                               : const Icon(
                                   Icons.person,
-                                  size: 32,
+                                  size: 18,
                                   color: AppTheme.primaryNavy,
                                 ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          authService.displayName ?? 'User',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          authService.email ?? '',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.8),
-                          ),
                         ),
                       ],
                     ),
                   ),
                 ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                children: [
-                  _buildDrawerItem(
-                    context,
-                    icon: Icons.home_outlined,
-                    title: 'Home',
-                    isSelected: _selectedIndex == 0,
-                    onTap: () {
-                      _onItemTapped(0);
-                      Navigator.pop(context);
-                    },
-                  ),
-                  _buildDrawerItem(
-                    context,
-                    icon: Icons.upload_file_outlined,
-                    title: 'Doc Upload',
-                    isSelected: _selectedIndex == 1,
-                    onTap: () {
-                      _onItemTapped(1);
-                      Navigator.pop(context);
-                    },
-                  ),
-                  _buildDrawerItem(
-                    context,
-                    icon: Icons.assignment_outlined,
-                    title: 'Questionnaire',
-                    isSelected: _selectedIndex == 2,
-                    onTap: () {
-                      _onItemTapped(2);
-                      Navigator.pop(context);
-                    },
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: Divider(
-                      color: AppTheme.borderLight.withValues(alpha: 0.3),
-                      height: 1,
-                    ),
-                  ),
-                  _buildDrawerItem(
-                    context,
-                    icon: Icons.logout_outlined,
-                    title: 'Logout',
-                    isSelected: false,
-                    onTap: () {
-                      Navigator.pop(context);
-                      widget.onLogout();
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-        },
+              );
+            },
+          ),
+        ],
       ),
       body: _screens()[_selectedIndex],
-    );
-  }
-
-  Widget _buildDrawerItem(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        border: Border(
-          left: BorderSide(
-            color: isSelected ? AppTheme.accentGold : Colors.transparent,
-            width: 3,
-          ),
-        ),
-      ),
-      child: ListTile(
-        leading: Icon(
-          icon,
-          color: isSelected ? AppTheme.primaryNavy : AppTheme.textMedium,
-          size: 22,
-        ),
-        title: Text(
-          title,
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            color: isSelected ? AppTheme.primaryNavy : AppTheme.textMedium,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-          ),
-        ),
-        selected: isSelected,
-        selectedTileColor: AppTheme.accentGold.withValues(alpha: 0.08),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(2),
-        ),
-        onTap: onTap,
-      ),
     );
   }
 }

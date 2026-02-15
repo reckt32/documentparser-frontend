@@ -1,2 +1,2 @@
-// const String kBackendUrl = 'https://docparser-app.azurewebsites.net';
-const String kBackendUrl = 'http://localhost:5000';
+const String kBackendUrl = 'https://docparser-app.azurewebsites.net';
+//const String kBackendUrl = 'http://localhost:5000';

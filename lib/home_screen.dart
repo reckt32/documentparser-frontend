@@ -44,14 +44,14 @@ class HomeScreen extends StatelessWidget {
           const SizedBox(height: 32),
           // Large display text with split typography
           Text(
-            'Document',
+            'Meerkat',
             style: Theme.of(context).textTheme.displayLarge?.copyWith(
                   color: Colors.white,
                   fontSize: 52,
                 ),
           ),
           Text(
-            'Intelligence',
+            'By ASFS',
             style: Theme.of(context).textTheme.displayLarge?.copyWith(
                   color: AppTheme.accentGold,
                   fontSize: 52,
