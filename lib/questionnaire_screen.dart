@@ -58,6 +58,9 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   int? _qid;
   String? _planUrl;
 
+  // Track which fields were auto-populated by prefill so we can highlight them
+  final Set<String> _prefilledFields = {};
+
   // Personal Info
   final _nameCtrl = TextEditingController();
   final _ageCtrl = TextEditingController();
@@ -273,9 +276,11 @@ if (resp.statusCode == 201) {
       if (_annualIncomeCtrl.text.trim().isEmpty) {
         if (lfAnnual != null) {
           _annualIncomeCtrl.text = _fmtNum(lfAnnual);
+          _prefilledFields.add('annual_income');
           appliedCount++;
         } else if (inflow != null) {
           _annualIncomeCtrl.text = _fmtNum(inflow);
+          _prefilledFields.add('annual_income');
           appliedCount++;
         }
       }
@@ -285,22 +290,26 @@ if (resp.statusCode == 201) {
           if (lfMonthlyExp != null) {
             if (lfMonthlyExp is num) {
               _monthlyExpensesCtrl.text = lfMonthlyExp.toStringAsFixed(2);
+              _prefilledFields.add('monthly_expenses');
               appliedCount++;
             } else {
               final parsed = double.tryParse(lfMonthlyExp.toString().replaceAll(',', ''));
               if (parsed != null) {
                 _monthlyExpensesCtrl.text = parsed.toStringAsFixed(2);
+                _prefilledFields.add('monthly_expenses');
                 appliedCount++;
               }
             }
           } else if (outflow != null) {
             if (outflow is num) {
               _monthlyExpensesCtrl.text = (outflow / 12.0).toStringAsFixed(2);
+              _prefilledFields.add('monthly_expenses');
               appliedCount++;
             } else {
               final parsed = double.tryParse(outflow.toString().replaceAll(',', ''));
               if (parsed != null) {
                 _monthlyExpensesCtrl.text = (parsed / 12.0).toStringAsFixed(2);
+                _prefilledFields.add('monthly_expenses');
                 appliedCount++;
               }
             }
@@ -317,6 +326,7 @@ if (resp.statusCode == 201) {
                     : double.tryParse(lfSavingsPct.toString().replaceAll(',', ''));
             if (sp != null && sp.isFinite) {
               _savingsPercentCtrl.text = sp.toStringAsFixed(2);
+              _prefilledFields.add('savings_percent');
               appliedCount++;
             }
           } else if (inflow != null && netcf != null) {
@@ -333,7 +343,7 @@ if (resp.statusCode == 201) {
             if (inflowNum > 0) {
               final sp = (netNum / inflowNum) * 100.0;
               _savingsPercentCtrl.text = sp.isFinite ? sp.toStringAsFixed(2) : '';
-              if (sp.isFinite) appliedCount++;
+              if (sp.isFinite) { _prefilledFields.add('savings_percent'); appliedCount++; }
             }
           }
         } catch (_) {}
@@ -344,6 +354,7 @@ if (resp.statusCode == 201) {
         final lfMonthlyEmi = lifestyle['monthly_emi'];
         if (lfMonthlyEmi != null) {
           _monthlyEmiCtrl.text = _fmtNum(lfMonthlyEmi);
+          _prefilledFields.add('monthly_emi');
           print('[_applyPrefill] Prefilled monthly EMI: ${_monthlyEmiCtrl.text}');
           appliedCount++;
         }
@@ -355,6 +366,7 @@ if (resp.statusCode == 201) {
         final lc = insurancePrefill['life_cover'] ?? insFromAnalysis['lifeCover'];
         if (lc != null) {
           _lifeCoverCtrl.text = _fmtNum(lc);
+          _prefilledFields.add('life_cover');
           appliedCount++;
         }
       }
@@ -362,6 +374,7 @@ if (resp.statusCode == 201) {
         final hc = insurancePrefill['health_cover'] ?? insFromAnalysis['healthCover'];
         if (hc != null) {
           _healthCoverCtrl.text = _fmtNum(hc);
+          _prefilledFields.add('health_cover');
           appliedCount++;
         }
       }
@@ -382,6 +395,7 @@ if (resp.statusCode == 201) {
         final avs = lifestyle['available_savings'];
         if (avs != null) {
           _availableSavingsCtrl.text = _fmtNum(avs);
+          _prefilledFields.add('available_savings');
           print('[_applyPrefill] Prefilled available savings: ${_availableSavingsCtrl.text}');
           appliedCount++;
         }
@@ -393,6 +407,7 @@ if (resp.statusCode == 201) {
         final v = alloc[key];
         if (c.text.trim().isEmpty && v != null) {
           c.text = _fmtNum(v);
+          _prefilledFields.add('alloc_$key');
           appliedCount++;
         }
       }
@@ -410,6 +425,7 @@ if (resp.statusCode == 201) {
         final mid = adv['recommendedEquityMid'];
         if (mid != null) {
           _equityAllocationCtrl.text = _fmtNum(mid);
+          _prefilledFields.add('equity_allocation');
           appliedCount++;
         }
       }
@@ -441,6 +457,7 @@ if (resp.statusCode == 201) {
         final name = personalFromBackend['name'] ?? personalFromAnalysis['name'];
         if (name != null) {
           _nameCtrl.text = name.toString();
+          _prefilledFields.add('name');
           print('[_applyPrefill] Prefilled name: ${_nameCtrl.text}');
           appliedCount++;
         }
@@ -450,6 +467,7 @@ if (resp.statusCode == 201) {
         final age = personalFromBackend['age'] ?? personalFromAnalysis['age'];
         if (age != null) {
           _ageCtrl.text = age.toString();
+          _prefilledFields.add('age');
           print('[_applyPrefill] Prefilled age: ${_ageCtrl.text}');
           appliedCount++;
         }
@@ -459,6 +477,7 @@ if (resp.statusCode == 201) {
         final pan = personalFromBackend['pan'] ?? personalFromAnalysis['pan'];
         if (pan != null) {
           _panCtrl.text = pan.toString();
+          _prefilledFields.add('pan');
           print('[_applyPrefill] Prefilled PAN: ${_panCtrl.text}');
           appliedCount++;
         }
@@ -468,6 +487,7 @@ if (resp.statusCode == 201) {
         final dob = personalFromBackend['dob'] ?? personalFromAnalysis['dob'];
         if (dob != null) {
           _dobCtrl.text = dob.toString();
+          _prefilledFields.add('dob');
           print('[_applyPrefill] Prefilled DOB: ${_dobCtrl.text}');
           appliedCount++;
         }
@@ -477,6 +497,7 @@ if (resp.statusCode == 201) {
         final contact = personalFromBackend['contact'] ?? personalFromBackend['email'] ?? personalFromBackend['phone'] ?? personalFromAnalysis['contact'];
         if (contact != null) {
           _contactCtrl.text = contact.toString();
+          _prefilledFields.add('contact');
           print('[_applyPrefill] Prefilled contact: ${_contactCtrl.text}');
           appliedCount++;
         }
@@ -763,14 +784,16 @@ if (resp.statusCode == 201) {
   // Section builders
 
   Widget _buildPersonalInfo() {
+    final hasPersonalPrefill = _prefilledFields.intersection({'name', 'age', 'pan', 'dob', 'contact'}).isNotEmpty;
     return _sectionCard(
       title: 'Personal Info',
+      showPrefillWarning: hasPersonalPrefill,
       children: [
-        _textField(_nameCtrl, 'Name'),
-        _textField(_ageCtrl, 'Age (years)', keyboard: TextInputType.number),
-        _textField(_panCtrl, 'PAN'),
-        _textField(_dobCtrl, 'Date of Birth (YYYY-MM-DD)'),
-        _textField(_contactCtrl, 'Contact (Email/Phone)'),
+        _textField(_nameCtrl, 'Name', isPrefilled: _prefilledFields.contains('name')),
+        _textField(_ageCtrl, 'Age (years)', keyboard: TextInputType.number, isPrefilled: _prefilledFields.contains('age')),
+        _textField(_panCtrl, 'PAN', isPrefilled: _prefilledFields.contains('pan')),
+        _textField(_dobCtrl, 'Date of Birth (YYYY-MM-DD)', isPrefilled: _prefilledFields.contains('dob')),
+        _textField(_contactCtrl, 'Contact (Email/Phone)', isPrefilled: _prefilledFields.contains('contact')),
         _dropdown<String>(
           label: 'Marital Status',
           value: _maritalStatus,
@@ -1326,13 +1349,16 @@ if (resp.statusCode == 201) {
 
 
   Widget _buildInsurance() {
+    final hasInsurancePrefill = _prefilledFields.intersection({'life_cover', 'health_cover'}).isNotEmpty;
     return _sectionCard(
       title: 'Insurance Coverage',
+      showPrefillWarning: hasInsurancePrefill,
       children: [
         _textField(
           _lifeCoverCtrl,
           'Term Life Cover (₹)',
           keyboard: TextInputType.number,
+          isPrefilled: _prefilledFields.contains('life_cover'),
         ),
         CheckboxListTile(
           title: const Text('I already have term life insurance'),
@@ -1346,6 +1372,7 @@ if (resp.statusCode == 201) {
           _healthCoverCtrl,
           'Health Cover (₹)',
           keyboard: TextInputType.number,
+          isPrefilled: _prefilledFields.contains('health_cover'),
         ),
         CheckboxListTile(
           title: const Text('I already have health insurance'),
@@ -1368,23 +1395,28 @@ if (resp.statusCode == 201) {
 
 
   Widget _buildLifestyle() {
+    final hasLifestylePrefill = _prefilledFields.intersection({'annual_income', 'monthly_expenses', 'monthly_emi', 'available_savings', 'savings_percent', 'alloc_equity', 'alloc_debt', 'alloc_gold', 'alloc_realEstate', 'alloc_insuranceLinked', 'alloc_cash'}).isNotEmpty;
     return _sectionCard(
       title: 'Lifestyle & Allocation',
+      showPrefillWarning: hasLifestylePrefill,
       children: [
         _textField(
           _annualIncomeCtrl,
           'Annual Income (₹)',
           keyboard: TextInputType.number,
+          isPrefilled: _prefilledFields.contains('annual_income'),
         ),
         _textField(
           _monthlyExpensesCtrl,
           'Monthly Expenses (₹)',
           keyboard: TextInputType.number,
+          isPrefilled: _prefilledFields.contains('monthly_expenses'),
         ),
         _textField(
           _monthlyEmiCtrl,
           'Monthly EMI (₹)',
           keyboard: TextInputType.number,
+          isPrefilled: _prefilledFields.contains('monthly_emi'),
         ),
         _textField(
           _emergencyFundCtrl,
@@ -1395,11 +1427,13 @@ if (resp.statusCode == 201) {
           _availableSavingsCtrl,
           'Available Savings for Investments/Insurance (₹)',
           keyboard: TextInputType.number,
+          isPrefilled: _prefilledFields.contains('available_savings'),
         ),
         _textField(
           _savingsPercentCtrl,
           'Savings % (if known)',
           keyboard: TextInputType.number,
+          isPrefilled: _prefilledFields.contains('savings_percent'),
         ),
         _dropdown<String>(
           label: 'Savings Band',
@@ -1435,15 +1469,16 @@ if (resp.statusCode == 201) {
           'Allocation % (optional)',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        _allocationRow('Equity', _allocationCtrls['equity']!),
-        _allocationRow('Debt', _allocationCtrls['debt']!),
-        _allocationRow('Gold', _allocationCtrls['gold']!),
-        _allocationRow('Real Estate', _allocationCtrls['realEstate']!),
+        _allocationRow('Equity', _allocationCtrls['equity']!, isPrefilled: _prefilledFields.contains('alloc_equity')),
+        _allocationRow('Debt', _allocationCtrls['debt']!, isPrefilled: _prefilledFields.contains('alloc_debt')),
+        _allocationRow('Gold', _allocationCtrls['gold']!, isPrefilled: _prefilledFields.contains('alloc_gold')),
+        _allocationRow('Real Estate', _allocationCtrls['realEstate']!, isPrefilled: _prefilledFields.contains('alloc_realEstate')),
         _allocationRow(
           'Insurance Linked',
           _allocationCtrls['insuranceLinked']!,
+          isPrefilled: _prefilledFields.contains('alloc_insuranceLinked'),
         ),
-        _allocationRow('Cash', _allocationCtrls['cash']!),
+        _allocationRow('Cash', _allocationCtrls['cash']!, isPrefilled: _prefilledFields.contains('alloc_cash')),
         _saveButton(() {
           _saveSection('lifestyle', {
             'annual_income': _annualIncomeCtrl.text.trim(),
@@ -1561,10 +1596,12 @@ if (resp.statusCode == 201) {
 
   // UI Helpers
 
-  Widget _sectionCard({required String title, required List<Widget> children}) {
+  Widget _sectionCard({required String title, required List<Widget> children, bool showPrefillWarning = false}) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final cardPadding = screenWidth < 600 ? 16.0 : 32.0;
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 12),
-      padding: const EdgeInsets.all(32),
+      padding: EdgeInsets.all(cardPadding),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(
@@ -1584,6 +1621,34 @@ if (resp.statusCode == 201) {
           ),
           const SizedBox(height: 8),
           AppTheme.goldAccentBar(width: 60, height: 2),
+          if (showPrefillWarning) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0x15FF0000),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: const Color(0x30FF0000), width: 1),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: Color(0xFFD32F2F), size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'The highlighted values below were auto-calculated from your documents. Please double-check and enter the correct amount if needed.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFFB71C1C),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 24),
           ...children,
         ],
@@ -1595,6 +1660,7 @@ if (resp.statusCode == 201) {
     TextEditingController c,
     String label, {
     TextInputType keyboard = TextInputType.text,
+    bool isPrefilled = false,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1603,6 +1669,14 @@ if (resp.statusCode == 201) {
         keyboardType: keyboard,
         decoration: InputDecoration(
           labelText: label,
+          filled: true,
+          fillColor: isPrefilled ? const Color(0x14FF0000) : Colors.white,
+          enabledBorder: isPrefilled
+              ? OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(2),
+                  borderSide: const BorderSide(color: Color(0x55FF0000), width: 1),
+                )
+              : null,
         ),
       ),
     );
@@ -1671,19 +1745,34 @@ if (resp.statusCode == 201) {
     );
   }
 
-  Widget _allocationRow(String label, TextEditingController c) {
+  Widget _allocationRow(String label, TextEditingController c, {bool isPrefilled = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          SizedBox(width: 130, child: Text(label)),
+          Flexible(
+            flex: 0,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 80, maxWidth: 140),
+              child: Text(label),
+            ),
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: TextField(
               controller: c,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: '%',
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
+                filled: true,
+                fillColor: isPrefilled ? const Color(0x14FF0000) : Colors.white,
+                enabledBorder: isPrefilled
+                    ? OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(2),
+                        borderSide: const BorderSide(color: Color(0x55FF0000), width: 1),
+                      )
+                    : null,
               ),
             ),
           ),
@@ -1702,9 +1791,9 @@ if (resp.statusCode == 201) {
           style: ElevatedButton.styleFrom(
             backgroundColor: AppTheme.primaryNavy,
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 32),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
           ),
-          child: const Text('Save Section'),
+          child: const FittedBox(child: Text('Save Section')),
         ),
       ),
     );
@@ -1741,9 +1830,14 @@ if (resp.statusCode == 201) {
                         children: [
                           _progressIndicator(steps.length),
                           Expanded(
-                            child: SingleChildScrollView(
-                              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
-                              child: steps[_stepIndex],
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                final hPad = constraints.maxWidth < 600 ? 16.0 : 40.0;
+                                return SingleChildScrollView(
+                                  padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 24),
+                                  child: steps[_stepIndex],
+                                );
+                              },
                             ),
                           ),
                           _navigationBar(steps.length),
@@ -1790,7 +1884,7 @@ if (resp.statusCode == 201) {
                                             await _generateReport();
                                           },
                                           icon: const Icon(Icons.picture_as_pdf),
-                                          label: const Text('Get Financial Report'),
+                                          label: const FittedBox(child: Text('Submit and Generate Report')),
                                         ),
                                       ),
                                     ],
@@ -1952,9 +2046,11 @@ if (resp.statusCode == 201) {
   Widget _progressIndicator(int total) {
     final progress = (_stepIndex + 1) / total;
     final percentage = (progress * 100).toInt();
+    final screenWidth = MediaQuery.of(context).size.width;
+    final hPad = screenWidth < 600 ? 16.0 : 40.0;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+      padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 24),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border(
@@ -2022,8 +2118,10 @@ if (resp.statusCode == 201) {
   }
 
   Widget _navigationBar(int total) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final hPad = screenWidth < 600 ? 16.0 : 40.0;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+      padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border(
@@ -2046,28 +2144,24 @@ if (resp.statusCode == 201) {
                           _stepIndex--;
                         });
                       },
-              child: const Text('Back'),
+              child: const FittedBox(child: Text('Back')),
             ),
           const Spacer(),
           Text('Step ${_stepIndex + 1} / $total'),
           const Spacer(),
-          ElevatedButton(
-            onPressed:
-                _loading
-                    ? null
-                    : () async {
-                      await _autoSaveCurrentSection();
-                      if (_stepIndex < total - 1) {
+          if (_stepIndex < total - 1)
+            ElevatedButton(
+              onPressed:
+                  _loading
+                      ? null
+                      : () async {
+                        await _autoSaveCurrentSection();
                         setState(() {
                           _stepIndex++;
                         });
-                      } else {
-                        // Keep flow to upload, but we now also show Get Financial Report button above
-                        widget.onCompleted?.call();
-                      }
-                    },
-            child: Text(_stepIndex == total - 1 ? 'Submit' : 'Next'),
-          ),
+                      },
+              child: const FittedBox(child: Text('Next')),
+            ),
         ],
       ),
     );

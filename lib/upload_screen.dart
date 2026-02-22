@@ -202,52 +202,66 @@ class _UploadScreenState extends State<UploadScreen>
                   const SizedBox(height: 32),
 
                   // Buttons
-                  Row(
-                    children: [
-                      Expanded(
-                        child: SizedBox(
-                          height: 48,
-                          child: OutlinedButton(
-                            onPressed: () {
-                              Navigator.of(ctx).pop();
-                              _skipUpload();
-                            },
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppTheme.textMedium,
-                              side: BorderSide(
-                                color: AppTheme.borderLight.withValues(
-                                  alpha: 0.5,
-                                ),
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(2),
+                  LayoutBuilder(
+                    builder: (ctx2, constraints) {
+                      final skipBtn = SizedBox(
+                        height: 48,
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: () {
+                            Navigator.of(ctx).pop();
+                            _skipUpload();
+                          },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.textMedium,
+                            side: BorderSide(
+                              color: AppTheme.borderLight.withValues(
+                                alpha: 0.5,
                               ),
                             ),
-                            child: const Text('Skip & Fill Manually'),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: SizedBox(
-                          height: 48,
-                          child: ElevatedButton(
-                            onPressed: () {
-                              Navigator.of(ctx).pop();
-                              _animController.forward();
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.primaryNavy,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(2),
-                              ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(2),
                             ),
-                            child: const Text('Continue to Upload'),
                           ),
+                          child: const FittedBox(child: Text('Skip & Fill Manually')),
                         ),
-                      ),
-                    ],
+                      );
+                      final continueBtn = SizedBox(
+                        height: 48,
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.of(ctx).pop();
+                            _animController.forward();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primaryNavy,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          child: const FittedBox(child: Text('Continue to Upload')),
+                        ),
+                      );
+
+                      if (constraints.maxWidth < 360) {
+                        return Column(
+                          children: [
+                            continueBtn,
+                            const SizedBox(height: 12),
+                            skipBtn,
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(child: skipBtn),
+                          const SizedBox(width: 16),
+                          Expanded(child: continueBtn),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),

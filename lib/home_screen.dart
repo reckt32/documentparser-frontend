@@ -31,12 +31,20 @@ class HomeScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Primary logo
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 60, maxWidth: 180),
-            child: Image.asset(
-              'assets/primarylogo.png',
-              fit: BoxFit.contain,
-            ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isSmall = MediaQuery.of(context).size.width < 600;
+              return ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: isSmall ? 100 : 120,
+                  maxWidth: isSmall ? 260 : 320,
+                ),
+                child: Image.asset(
+                  'assets/primarylogo.png',
+                  fit: BoxFit.contain,
+                ),
+              );
+            },
           ),
           const SizedBox(height: 24),
           // Gold accent bar
@@ -51,7 +59,7 @@ class HomeScreen extends StatelessWidget {
                 ),
           ),
           Text(
-            'By ASFS',
+            'Your Watchful Advisor',
             style: Theme.of(context).textTheme.displayLarge?.copyWith(
                   color: AppTheme.accentGold,
                   fontSize: 52,

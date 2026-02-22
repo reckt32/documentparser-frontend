@@ -83,7 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 // Subtitle
                 Text(
-                  'AI-powered insights for your finances',
+                  'Your Watchful Advisor',
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         color: AppTheme.textLight,
                       ),
