@@ -150,13 +150,15 @@ class AuthService extends ChangeNotifier {
         return;
       }
 
+      final headers = {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
+
       // First, get current status from backend
       var response = await http.get(
         Uri.parse('$kBackendUrl/auth/status'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
+        headers: headers,
       ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
@@ -164,6 +166,7 @@ class AuthService extends ChangeNotifier {
         final hasPaidFromServer = data['user']?['has_paid'] ?? false;
 
         if (hasPaidFromServer) {
+          // Server confirms paid - use the full user data (includes report_credits)
           _appUser = AppUser.fromJson(data['user']);
           _error = null;
           return;
@@ -173,37 +176,29 @@ class AuthService extends ChangeNotifier {
         debugPrint('Server shows unpaid, attempting reconciliation...');
         response = await http.post(
           Uri.parse('$kBackendUrl/payment/reconcile'),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
+          headers: headers,
         ).timeout(const Duration(seconds: 15));
 
         if (response.statusCode == 200) {
           final reconcileData = json.decode(response.body);
           if (reconcileData['has_paid'] == true) {
-            // Reconciliation found payment - update local state
-            debugPrint('Reconciliation found payment! Updating state.');
-            _appUser = AppUser(
-              firebaseUid: _appUser!.firebaseUid,
-              email: _appUser!.email,
-              displayName: _appUser!.displayName,
-              hasPaid: true,
-              paymentDate: reconcileData['payment_date'] ?? DateTime.now().toIso8601String(),
-            );
-          } else {
-            // Update app user from current status (unpaid confirmed)
-            final statusData = json.decode((await http.get(
-              Uri.parse('$kBackendUrl/auth/status'),
-              headers: {
-                'Authorization': 'Bearer $token',
-                'Content-Type': 'application/json',
-              },
-            )).body);
-            _appUser = AppUser.fromJson(statusData['user']);
+            debugPrint('Reconciliation found payment! Refreshing state from server.');
           }
-          _error = null;
         }
+
+        // After reconciliation (whether it found a payment or not),
+        // always re-fetch from /auth/status to get complete user data
+        // including report_credits
+        response = await http.get(
+          Uri.parse('$kBackendUrl/auth/status'),
+          headers: headers,
+        ).timeout(const Duration(seconds: 15));
+
+        if (response.statusCode == 200) {
+          final statusData = json.decode(response.body);
+          _appUser = AppUser.fromJson(statusData['user']);
+        }
+        _error = null;
       } else {
         _error = 'Failed to check status';
       }
