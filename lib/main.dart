@@ -86,8 +86,24 @@ class AuthWrapper extends StatelessWidget {
           );
         }
 
+        // User is not logged in - show login screen
+        if (!authService.isAuthenticated) {
+          return const LoginScreen();
+        }
+
+        // User has credits - show main app
+        // Checked BEFORE error so that optimistic markAsPaid() always
+        // navigates the user, even if a stale error exists from reconciliation.
+        if (authService.hasCredits) {
+          return MainAppScreen(
+            onLogout: () async {
+              await authService.signOut();
+            },
+          );
+        }
+
         // Show error state with retry if sync failed but user is authenticated
-        if (authService.error != null && authService.isAuthenticated) {
+        if (authService.error != null) {
           return Scaffold(
             backgroundColor: AppTheme.backgroundCream,
             body: Center(
@@ -124,22 +140,8 @@ class AuthWrapper extends StatelessWidget {
           );
         }
 
-        // User is not logged in - show login screen
-        if (!authService.isAuthenticated) {
-          return const LoginScreen();
-        }
-
-        // User has no report credits - show payment screen
-        if (!authService.hasCredits) {
-          return const PaymentScreen();
-        }
-
-        // User is authenticated and has credits - show main app
-        return MainAppScreen(
-          onLogout: () async {
-            await authService.signOut();
-          },
-        );
+        // User is authenticated but has no credits - show payment screen
+        return const PaymentScreen();
       },
     );
   }

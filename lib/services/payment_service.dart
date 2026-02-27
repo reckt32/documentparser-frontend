@@ -1,7 +1,7 @@
+import 'dart:async';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart';
 import 'package:razorpay_web/razorpay_web.dart';
 import 'package:frontend/services/auth_service.dart';
 import 'package:frontend/services/api_service.dart';
@@ -108,60 +108,54 @@ class PaymentService {
   /// Razorpay's success callback is authoritative — the payment IS captured.
   /// We update local state immediately so the UI navigates, then verify
   /// with the backend and refresh from server to ensure consistency.
-  void _handlePaymentSuccess(PaymentSuccessResponse response) async {
-    debugPrint('Payment success: ${response.paymentId}');
-    
-    try {
-      // Update local state IMMEDIATELY — don't wait for backend verify.
-      // Razorpay only fires this callback when payment is captured.
-      _authService.markAsPaid();
+  void _handlePaymentSuccess(PaymentSuccessResponse response) {
+    // Escape JS interop callback context — schedule on Dart's event loop
+    // so notifyListeners() actually triggers a Flutter frame rebuild.
+    Timer.run(() async {
+      debugPrint('Payment success: ${response.paymentId}');
       
-      // CRITICAL: Razorpay's callback comes from JavaScript interop.
-      // notifyListeners() inside markAsPaid() may not trigger a Flutter
-      // frame rebuild in this JS callback context. Force it.
-      WidgetsBinding.instance.scheduleFrame();
-      
-      // Also schedule a delayed re-notify as a safety net for web rendering
-      Future.delayed(const Duration(milliseconds: 100), () {
-        _authService.notifyListeners();
-      });
-      
-      _onSuccess?.call(response.paymentId ?? '');
-
-      // Push purchase event to GTM dataLayer for conversion tracking
-      _pushPurchaseToDataLayer(
-        paymentId: response.paymentId ?? '',
-        orderId: response.orderId ?? _currentOrderId ?? '',
-        amountPaise: _currentAmountPaise ?? 99900,
-      );
-      
-      // Verify with backend (blocking) then refresh state from server
       try {
-        final verifyResponse = await _apiService.post('/payment/verify', {
-          'order_id': response.orderId ?? _currentOrderId,
-          'payment_id': response.paymentId,
-          'signature': response.signature,
-        });
+        // Update local state IMMEDIATELY — don't wait for backend verify.
+        // Razorpay only fires this callback when payment is captured.
+        _authService.markAsPaid();
         
-        if (verifyResponse.success) {
-          debugPrint('Backend verification confirmed');
-        } else {
-          debugPrint('Backend verify failed (webhook will handle): ${verifyResponse.errorMessage}');
+        _onSuccess?.call(response.paymentId ?? '');
+
+        // Push purchase event to GTM dataLayer for conversion tracking
+        _pushPurchaseToDataLayer(
+          paymentId: response.paymentId ?? '',
+          orderId: response.orderId ?? _currentOrderId ?? '',
+          amountPaise: _currentAmountPaise ?? 99900,
+        );
+        
+        // Verify with backend (blocking) then refresh state from server
+        try {
+          final verifyResponse = await _apiService.post('/payment/verify', {
+            'order_id': response.orderId ?? _currentOrderId,
+            'payment_id': response.paymentId,
+            'signature': response.signature,
+          });
+          
+          if (verifyResponse.success) {
+            debugPrint('Backend verification confirmed');
+          } else {
+            debugPrint('Backend verify failed (webhook will handle): ${verifyResponse.errorMessage}');
+          }
+        } catch (e) {
+          debugPrint('Backend verify error (webhook will handle): $e');
         }
-      } catch (e) {
-        debugPrint('Backend verify error (webhook will handle): $e');
-      }
-      
-      // Always refresh from server to ensure credits are synced
-      await _authService.refreshPaymentStatus();
-    } catch (e) {
-      debugPrint('Error in payment success handler: $e');
-      // Even on error, try to refresh from server as last resort
-      try {
+        
+        // Always refresh from server to ensure credits are synced
         await _authService.refreshPaymentStatus();
-      } catch (_) {}
-      _onError?.call('Payment processing error. Please check your payment status.');
-    }
+      } catch (e) {
+        debugPrint('Error in payment success handler: $e');
+        // Even on error, try to refresh from server as last resort
+        try {
+          await _authService.refreshPaymentStatus();
+        } catch (_) {}
+        _onError?.call('Payment processing error. Please check your payment status.');
+      }
+    });
   }
 
   /// Handle payment error from Razorpay

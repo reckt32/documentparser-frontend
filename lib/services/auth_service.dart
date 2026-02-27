@@ -369,6 +369,9 @@ class AuthService extends ChangeNotifier {
   /// Mark user as paid (called after successful payment)
   void markAsPaid({int creditsAdded = 3}) {
     if (_appUser != null) {
+      // Clear any stale error/syncing state so AuthWrapper can redirect
+      _error = null;
+      _isSyncing = false;
       _appUser = AppUser(
         firebaseUid: _appUser!.firebaseUid,
         email: _appUser!.email,

@@ -31,8 +31,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Future<void> _checkPaymentStatus() async {
     final authService = Provider.of<AuthService>(context, listen: false);
     
-    // Force refresh from backend to ensure we have latest status
-    await authService.forceRefreshPaymentStatus();
+    // Refresh from backend to ensure we have latest status.
+    // Uses /auth/status only — reconciliation removed to prevent
+    // old Razorpay orders from causing duplicate credits (Bug 2).
+    await authService.refreshPaymentStatus();
     
     if (mounted) {
       setState(() {
@@ -89,32 +91,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
     final size = MediaQuery.of(context).size;
-
-    // Safety net: if user already has credits (e.g. reconcile found a payment,
-    // or optimistic update from markAsPaid), don't show payment UI.
-    // Schedule a rebuild of AuthWrapper to redirect to MainAppScreen.
-    if (authService.hasCredits) {
-      // Force AuthWrapper to re-evaluate by scheduling a post-frame callback
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) authService.notifyListeners();
-      });
-      return Scaffold(
-        backgroundColor: AppTheme.backgroundCream,
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(color: AppTheme.primaryNavy),
-              const SizedBox(height: 16),
-              Text(
-                'Redirecting...',
-                style: TextStyle(color: AppTheme.textLight, fontSize: 14),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
 
     // Show loading while checking payment status with backend
     if (_isCheckingStatus || authService.isSyncing) {
@@ -301,14 +277,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
                                 ],
                               ),
                               const SizedBox(height: 8),
-                              GestureDetector(
+                              InkWell(
                                 onTap: _checkPaymentStatus,
-                                child: Text(
-                                  'Already paid? Tap here to check status',
-                                  style: TextStyle(
-                                    color: AppTheme.primaryNavy,
-                                    fontSize: 12,
-                                    decoration: TextDecoration.underline,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 4),
+                                  child: Text(
+                                    'Already paid? Tap here to check status',
+                                    style: TextStyle(
+                                      color: AppTheme.primaryNavy,
+                                      fontSize: 12,
+                                      decoration: TextDecoration.underline,
+                                    ),
                                   ),
                                 ),
                               ),
