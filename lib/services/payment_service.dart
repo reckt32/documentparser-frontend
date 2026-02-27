@@ -1,3 +1,5 @@
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import 'package:flutter/foundation.dart';
 import 'package:razorpay_web/razorpay_web.dart';
 import 'package:frontend/services/auth_service.dart';
@@ -111,6 +113,12 @@ class PaymentService {
       // Razorpay only fires this callback when payment is captured.
       _authService.markAsPaid();
       _onSuccess?.call(response.paymentId ?? '');
+
+      // Push purchase event to GTM dataLayer for conversion tracking
+      _pushPurchaseToDataLayer(
+        paymentId: response.paymentId ?? '',
+        orderId: response.orderId ?? _currentOrderId ?? '',
+      );
       
       // Verify with backend (blocking) then refresh state from server
       try {
@@ -161,6 +169,44 @@ class PaymentService {
     _onError?.call(message);
   }
 
+  /// Push a GA4 ecommerce 'purchase' event to the GTM dataLayer
+  void _pushPurchaseToDataLayer({
+    required String paymentId,
+    required String orderId,
+  }) {
+    try {
+      final jsEvent = {
+        'event': 'purchase',
+        'ecommerce': {
+          'transaction_id': paymentId,
+          'value': 999,
+          'currency': 'INR',
+          'items': [
+            {
+              'item_id': 'report_credits_3',
+              'item_name': '3 Financial Reports',
+              'price': 999,
+              'quantity': 1,
+            }
+          ],
+        },
+        'razorpay_order_id': orderId,
+      }.jsify();
+
+      // Access window.dataLayer and push the event
+      final dataLayer = globalContext.getProperty('dataLayer'.toJS);
+      if (dataLayer.isA<JSArray>()) {
+        (dataLayer as JSArray).callMethod('push'.toJS, jsEvent);
+        debugPrint('GTM purchase event pushed: $paymentId');
+      } else {
+        debugPrint('GTM dataLayer not found on window');
+      }
+    } catch (e) {
+      // Never let analytics break the payment flow
+      debugPrint('Failed to push GTM purchase event: $e');
+    }
+  }
+
   /// Handle external wallet selection
   void _handleExternalWallet(ExternalWalletResponse response) {
     debugPrint('External wallet selected: ${response.walletName}');
@@ -176,14 +222,14 @@ class PaymentService {
         hasPaid: response.data['has_paid'] ?? false,
         paymentId: response.data['payment_id'],
         paymentDate: response.data['payment_date'],
-        pricePaise: response.data['report_price_paise'] ?? 49900,
+        pricePaise: response.data['report_price_paise'] ?? 99900,
         remainingCredits: response.data['remaining_credits'] ?? 0,
         canGenerateReport: response.data['can_generate_report'] ?? false,
         creditsPerPayment: response.data['credits_per_payment'] ?? 3,
       );
     }
     
-    return PaymentStatus(hasPaid: false, pricePaise: 49900, remainingCredits: 0);
+    return PaymentStatus(hasPaid: false, pricePaise: 99900, remainingCredits: 0);
   }
 }
 

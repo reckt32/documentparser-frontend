@@ -339,7 +339,23 @@ class AuthService extends ChangeNotifier {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        _appUser = AppUser.fromJson(data['user']);
+        final serverUser = AppUser.fromJson(data['user']);
+        // Guard against server returning fewer credits than local state.
+        // This happens when verify/webhook hasn't processed yet but we've
+        // already optimistically updated local credits via markAsPaid().
+        if (_appUser == null || serverUser.reportCredits >= _appUser!.reportCredits) {
+          _appUser = serverUser;
+        } else {
+          // Server has fewer credits — keep local credits but update other fields
+          _appUser = AppUser(
+            firebaseUid: serverUser.firebaseUid,
+            email: serverUser.email,
+            displayName: serverUser.displayName,
+            hasPaid: _appUser!.hasPaid || serverUser.hasPaid,
+            paymentDate: serverUser.paymentDate ?? _appUser!.paymentDate,
+            reportCredits: _appUser!.reportCredits,
+          );
+        }
         notifyListeners();
       }
     } catch (e) {

@@ -197,8 +197,20 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       // Price
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
+                          // Original price with strikethrough
+                          Text(
+                            '₹1499',
+                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                  color: AppTheme.textLight,
+                                  fontWeight: FontWeight.w400,
+                                  decoration: TextDecoration.lineThrough,
+                                  decorationColor: AppTheme.textLight,
+                                ),
+                          ),
+                          const SizedBox(width: 12),
+                          // Discounted price
                           Text(
                             '₹',
                             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -207,7 +219,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                                 ),
                           ),
                           Text(
-                            '499',
+                            '999',
                             style: Theme.of(context).textTheme.displayMedium?.copyWith(
                                   color: AppTheme.primaryNavy,
                                   fontWeight: FontWeight.bold,
