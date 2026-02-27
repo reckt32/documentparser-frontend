@@ -73,6 +73,25 @@ class AuthService extends ChangeNotifier {
     _firebaseAuth.authStateChanges().listen(_onAuthStateChanged);
   }
 
+  /// Update _appUser from server data WITHOUT regressing credits.
+  /// Prevents race conditions where a stale server response overwrites
+  /// optimistic local credits (e.g., after markAsPaid).
+  void _updateAppUser(AppUser serverUser) {
+    if (_appUser == null || serverUser.reportCredits >= _appUser!.reportCredits) {
+      _appUser = serverUser;
+    } else {
+      // Server has fewer credits than local — keep local credits, update rest
+      _appUser = AppUser(
+        firebaseUid: serverUser.firebaseUid,
+        email: serverUser.email,
+        displayName: serverUser.displayName,
+        hasPaid: _appUser!.hasPaid || serverUser.hasPaid,
+        paymentDate: serverUser.paymentDate ?? _appUser!.paymentDate,
+        reportCredits: _appUser!.reportCredits,
+      );
+    }
+  }
+
   /// Handle Firebase auth state changes
   void _onAuthStateChanged(User? user) async {
     _firebaseUser = user;
@@ -109,7 +128,7 @@ class AuthService extends ChangeNotifier {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        _appUser = AppUser.fromJson(data['user']);
+        _updateAppUser(AppUser.fromJson(data['user']));
         _error = null;
       } else {
         _error = 'Failed to sync with backend';
@@ -167,7 +186,7 @@ class AuthService extends ChangeNotifier {
 
         if (hasPaidFromServer) {
           // Server confirms paid - use the full user data (includes report_credits)
-          _appUser = AppUser.fromJson(data['user']);
+          _updateAppUser(AppUser.fromJson(data['user']));
           _error = null;
           return;
         }
@@ -196,7 +215,7 @@ class AuthService extends ChangeNotifier {
 
         if (response.statusCode == 200) {
           final statusData = json.decode(response.body);
-          _appUser = AppUser.fromJson(statusData['user']);
+          _updateAppUser(AppUser.fromJson(statusData['user']));
         }
         _error = null;
       } else {
@@ -339,23 +358,7 @@ class AuthService extends ChangeNotifier {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        final serverUser = AppUser.fromJson(data['user']);
-        // Guard against server returning fewer credits than local state.
-        // This happens when verify/webhook hasn't processed yet but we've
-        // already optimistically updated local credits via markAsPaid().
-        if (_appUser == null || serverUser.reportCredits >= _appUser!.reportCredits) {
-          _appUser = serverUser;
-        } else {
-          // Server has fewer credits — keep local credits but update other fields
-          _appUser = AppUser(
-            firebaseUid: serverUser.firebaseUid,
-            email: serverUser.email,
-            displayName: serverUser.displayName,
-            hasPaid: _appUser!.hasPaid || serverUser.hasPaid,
-            paymentDate: serverUser.paymentDate ?? _appUser!.paymentDate,
-            reportCredits: _appUser!.reportCredits,
-          );
-        }
+        _updateAppUser(AppUser.fromJson(data['user']));
         notifyListeners();
       }
     } catch (e) {

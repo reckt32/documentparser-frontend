@@ -90,6 +90,32 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final authService = Provider.of<AuthService>(context);
     final size = MediaQuery.of(context).size;
 
+    // Safety net: if user already has credits (e.g. reconcile found a payment,
+    // or optimistic update from markAsPaid), don't show payment UI.
+    // Schedule a rebuild of AuthWrapper to redirect to MainAppScreen.
+    if (authService.hasCredits) {
+      // Force AuthWrapper to re-evaluate by scheduling a post-frame callback
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) authService.notifyListeners();
+      });
+      return Scaffold(
+        backgroundColor: AppTheme.backgroundCream,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(color: AppTheme.primaryNavy),
+              const SizedBox(height: 16),
+              Text(
+                'Redirecting...',
+                style: TextStyle(color: AppTheme.textLight, fontSize: 14),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     // Show loading while checking payment status with backend
     if (_isCheckingStatus || authService.isSyncing) {
       return Scaffold(

@@ -1,6 +1,7 @@
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:razorpay_web/razorpay_web.dart';
 import 'package:frontend/services/auth_service.dart';
 import 'package:frontend/services/api_service.dart';
@@ -24,6 +25,7 @@ class PaymentService {
   PaymentErrorCallback? _onError;
   
   String? _currentOrderId;
+  int? _currentAmountPaise;
   bool _isInitialized = false;
 
   PaymentService(this._authService, this._apiService);
@@ -72,6 +74,7 @@ class PaymentService {
 
     final orderData = response.data['order'];
     _currentOrderId = orderData['order_id'];
+    _currentAmountPaise = orderData['amount'];
     final keyId = orderData['key_id'];
     final amount = orderData['amount'];
     final userEmail = response.data['user_email'] ?? '';
@@ -112,12 +115,24 @@ class PaymentService {
       // Update local state IMMEDIATELY — don't wait for backend verify.
       // Razorpay only fires this callback when payment is captured.
       _authService.markAsPaid();
+      
+      // CRITICAL: Razorpay's callback comes from JavaScript interop.
+      // notifyListeners() inside markAsPaid() may not trigger a Flutter
+      // frame rebuild in this JS callback context. Force it.
+      WidgetsBinding.instance.scheduleFrame();
+      
+      // Also schedule a delayed re-notify as a safety net for web rendering
+      Future.delayed(const Duration(milliseconds: 100), () {
+        _authService.notifyListeners();
+      });
+      
       _onSuccess?.call(response.paymentId ?? '');
 
       // Push purchase event to GTM dataLayer for conversion tracking
       _pushPurchaseToDataLayer(
         paymentId: response.paymentId ?? '',
         orderId: response.orderId ?? _currentOrderId ?? '',
+        amountPaise: _currentAmountPaise ?? 99900,
       );
       
       // Verify with backend (blocking) then refresh state from server
@@ -173,19 +188,21 @@ class PaymentService {
   void _pushPurchaseToDataLayer({
     required String paymentId,
     required String orderId,
+    required int amountPaise,
   }) {
     try {
+      final amountRupees = amountPaise / 100;
       final jsEvent = {
         'event': 'purchase',
         'ecommerce': {
           'transaction_id': paymentId,
-          'value': 999,
+          'value': amountRupees,
           'currency': 'INR',
           'items': [
             {
               'item_id': 'report_credits_3',
               'item_name': '3 Financial Reports',
-              'price': 999,
+              'price': amountRupees,
               'quantity': 1,
             }
           ],
