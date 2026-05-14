@@ -5,6 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:frontend/app_theme.dart';
 import 'package:frontend/constants.dart';
+import 'package:frontend/services/auth_service.dart';
+import 'package:provider/provider.dart';
 
 /// Spend Right Screen — 4-question lifestyle input with live Golden Number
 /// counter and animated Status Badge (Saver / Balanced / Spender).
@@ -142,9 +144,18 @@ class _SpendRightScreenState extends State<SpendRightScreen>
     });
 
     try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final token = await authService.getIdToken();
+      final headers = {
+        'Content-Type': 'application/json',
+      };
+      if (token != null) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
       final resp = await http.post(
         Uri.parse('$kBackendUrl/api/free/spend-right'),
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: jsonEncode({
           'income': income,
           'rent': rent,
@@ -684,7 +695,32 @@ class _SpendRightScreenState extends State<SpendRightScreen>
             isBold: true,
             valueColor: surplus >= 0 ? AppTheme.successGreen : AppTheme.errorRed,
           ),
+          const SizedBox(height: 20),
+          _buildUpgradeButton(context),
         ],
+      ),
+    );
+  }
+
+  Widget _buildUpgradeButton(BuildContext context) {
+    final authService = Provider.of<AuthService>(context);
+    if (!authService.isAuthenticated) {
+      return const SizedBox.shrink();
+    }
+
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () {
+          Navigator.of(context).pushNamed('/questionnaire');
+        },
+        icon: const Icon(Icons.auto_awesome_outlined, size: 18),
+        label: const Text('UPGRADE TO FULL REPORT'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppTheme.accentGold,
+          side: const BorderSide(color: AppTheme.accentGold),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+        ),
       ),
     );
   }

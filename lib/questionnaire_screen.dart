@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
@@ -152,8 +153,78 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
     if (_qid != null) {
       _fetchQuestionnaire();
     } else {
-      _startQuestionnaire(); // auto-start so the form appears immediately
+      _fetchLatestQuestionnaireIfAuthenticated();
     }
+  }
+
+  Future<void> _fetchLatestQuestionnaireIfAuthenticated() async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    if (!authService.isAuthenticated) {
+      _startQuestionnaire();
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _statusMessage = 'Checking for existing progress...';
+    });
+
+    try {
+      final token = await authService.getIdToken();
+      final resp = await http.get(
+        Uri.parse('${widget.backendUrl}/api/questionnaire/latest'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (resp.statusCode == 200) {
+        final body = jsonDecode(resp.body);
+        if (body['questionnaire_id'] != null) {
+          setState(() {
+            _qid = body['questionnaire_id'];
+            _statusMessage = 'Resuming your progress...';
+          });
+          _hydrateFromData(body['data']);
+          _fetchQuestionnaire(); // To get document pre-fills etc.
+        } else {
+          _startQuestionnaire();
+        }
+      } else {
+        _startQuestionnaire();
+      }
+    } catch (e) {
+      print('[QuestionnaireScreen] Error fetching latest: $e');
+      _startQuestionnaire();
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
+
+  void _hydrateFromData(Map<String, dynamic> data) {
+    if (data == null) return;
+
+    // Lifestyle
+    final lifestyle = data['lifestyle'];
+    if (lifestyle != null) {
+      if (lifestyle['annual_income'] != null) _annualIncomeCtrl.text = lifestyle['annual_income'].toString();
+      if (lifestyle['monthly_expenses'] != null) _monthlyExpensesCtrl.text = lifestyle['monthly_expenses'].toString();
+      if (lifestyle['monthly_emi'] != null) _monthlyEmiCtrl.text = lifestyle['monthly_emi'].toString();
+      if (lifestyle['expected_pension'] != null) _desiredMonthlyPensionCtrl.text = lifestyle['expected_pension'].toString();
+      if (lifestyle['manual_sip'] != null) _manualSipCtrl.text = lifestyle['manual_sip'].toString();
+      if (lifestyle['manual_corpus'] != null) _manualCorpusCtrl.text = lifestyle['manual_corpus'].toString();
+    }
+
+    // Goals
+    final goals = data['goals'];
+    if (goals != null) {
+      if (goals['wants_retirement_planning'] == true) {
+        _wantsRetirementPlanning = true;
+        if (goals['expected_pension'] != null && _desiredMonthlyPensionCtrl.text.isEmpty) {
+          _desiredMonthlyPensionCtrl.text = goals['expected_pension'].toString();
+        }
+      }
+    }
+    
+    // Can add more hydration logic here for personal_info, risk, etc.
   }
 
   @override
@@ -652,7 +723,7 @@ if (resp.statusCode == 201) {
                 })
               : [],
           'wants_retirement_planning': _wantsRetirementPlanning,
-          'desired_monthly_pension': _desiredMonthlyPensionCtrl.text.trim(),
+          'expected_pension': _desiredMonthlyPensionCtrl.text.trim(),
         });
         break;
       case 3:
@@ -1026,14 +1097,17 @@ if (resp.statusCode == 201) {
     double desiredPension = double.tryParse(_desiredMonthlyPensionCtrl.text.trim()) ?? 0;
     
     int yearsToRetirement = (60 - age).clamp(0, 60).toInt();
-    double standardCorpus = yearsToRetirement * monthlyIncome * 12;
+    
+    // [FOUNDER LOGIC] Derive target corpus from Monthly Expenses - Expected Pension
+    // Target Corpus = (Current Monthly Expense - Expected Pension) * 12 * (1.07 ^ Years_to_Retire) / 0.05
+    double expectedPension = double.tryParse(_desiredMonthlyPensionCtrl.text.trim()) ?? 0;
+    double netExpense = (monthlyExpenses - expectedPension).clamp(0, double.infinity);
+    
     double inflationAdjustedCorpus = 0;
-    if (desiredPension > 0) {
-      double inflationMultiplier = 1.06; // 6% inflation
-      for (int i = 0; i < yearsToRetirement; i++) {
-        inflationMultiplier *= 1.06;
-      }
-      inflationAdjustedCorpus = desiredPension * 12 * inflationMultiplier * 25; // 25 years of retirement
+    if (netExpense > 0 && yearsToRetirement > 0) {
+      double inflationMultiplier = math.pow(1.07, yearsToRetirement).toDouble();
+      // Target Corpus = (inflated monthly * 12) / 0.05
+      inflationAdjustedCorpus = (netExpense * inflationMultiplier * 12) / 0.05;
     }
     
     bool pensionBelowExpenses = desiredPension > 0 && monthlyExpenses > 0 && desiredPension < monthlyExpenses;
@@ -1082,8 +1156,9 @@ if (resp.statusCode == 201) {
         if (_wantsRetirementPlanning) ...[
           _textField(
             _desiredMonthlyPensionCtrl,
-            'Desired Monthly Pension (₹)',
+            'Expected Pension (Guaranteed Monthly)',
             keyboard: TextInputType.number,
+            hint: 'e.g. Govt pension, NPS, or guaranteed schemes',
           ),
           if (pensionBelowExpenses)
             Container(
@@ -1128,9 +1203,11 @@ if (resp.statusCode == 201) {
                 Text('(Formula: (60-age) × monthly income × 12)'),
                 if (desiredPension > 0) ...[
                   const Divider(),
-                  Text('Your Pension Goal: ₹${desiredPension.toStringAsFixed(0)}/month'),
-                  Text('Inflation-Adjusted Corpus: ₹${inflationAdjustedCorpus.toStringAsFixed(0)}'),
-                  const Text('(Assumes 6% inflation, 25-year retirement)', style: TextStyle(fontSize: 11)),
+                Text('Expected Monthly Pension: ₹${expectedPension.toStringAsFixed(0)}'),
+                Text('Net Monthly Expense: ₹${netExpense.toStringAsFixed(0)}'),
+                const Divider(),
+                Text('Derived Retirement Goal: ₹${(inflationAdjustedCorpus / 10000000).toStringAsFixed(2)} Cr'),
+                const Text('(Assumes 7% inflation, 5% withdrawal rate)', style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
                 ],
               ],
             ),
@@ -1183,11 +1260,24 @@ if (resp.statusCode == 201) {
             ),
             _inlineRow([
               Expanded(
-                child: _textField(
-                  ctrls['target_amount']!,
-                  'Target (₹)',
-                  keyboard: TextInputType.number,
-                ),
+                child: i < _goalTypes.length && _goalTypes[i] == 'Retirement Corpus'
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'Target: Auto-derived',
+                          style: TextStyle(color: Colors.grey, fontSize: 12, fontStyle: FontStyle.italic),
+                        ),
+                      )
+                    : _textField(
+                        ctrls['target_amount']!,
+                        'Target (₹)',
+                        keyboard: TextInputType.number,
+                      ),
               ),
               const SizedBox(width: 12),
               Expanded(

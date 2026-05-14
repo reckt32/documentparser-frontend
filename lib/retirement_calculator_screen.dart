@@ -5,6 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:frontend/app_theme.dart';
 import 'package:frontend/constants.dart';
+import 'package:frontend/services/auth_service.dart';
+import 'package:provider/provider.dart';
 
 /// Retirement Calculator Screen — Gap analysis with 4 result cards,
 /// slider for years-to-retire, and step-up SIP recommendation.
@@ -22,6 +24,7 @@ class RetirementCalculatorScreen extends StatefulWidget {
 class _RetirementCalculatorScreenState extends State<RetirementCalculatorScreen>
     with TickerProviderStateMixin {
   final _expenseCtrl = TextEditingController();
+  final _pensionCtrl = TextEditingController();
   final _corpusCtrl = TextEditingController();
   final _sipCtrl = TextEditingController();
 
@@ -57,6 +60,7 @@ class _RetirementCalculatorScreenState extends State<RetirementCalculatorScreen>
   @override
   void dispose() {
     _expenseCtrl.dispose();
+    _pensionCtrl.dispose();
     _corpusCtrl.dispose();
     _sipCtrl.dispose();
     for (final c in _cardAnimCtrls) {
@@ -106,14 +110,24 @@ class _RetirementCalculatorScreenState extends State<RetirementCalculatorScreen>
     });
 
     try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final token = await authService.getIdToken();
+      final headers = {
+        'Content-Type': 'application/json',
+      };
+      if (token != null) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
       final resp = await http.post(
         Uri.parse('$kBackendUrl/api/free/retirement-calc'),
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: jsonEncode({
           'monthly_expense': expense,
           'years_to_retire': _yearsToRetire,
           'existing_corpus': corpus,
           'ongoing_sip': sip,
+          'expected_pension': double.tryParse(_pensionCtrl.text.replaceAll(',', '')) ?? 0,
         }),
       );
 
@@ -176,6 +190,16 @@ class _RetirementCalculatorScreenState extends State<RetirementCalculatorScreen>
                     controller: _expenseCtrl,
                     icon: Icons.receipt_long_outlined,
                     isPrimary: true,
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Expected Pension Input
+                  _buildPremiumInput(
+                    context,
+                    label: 'EXPECTED PENSION',
+                    hint: 'Guaranteed monthly income',
+                    controller: _pensionCtrl,
+                    icon: Icons.account_balance_wallet_outlined,
                   ),
                   const SizedBox(height: 20),
 
@@ -562,7 +586,32 @@ class _RetirementCalculatorScreenState extends State<RetirementCalculatorScreen>
             ),
           );
         }),
+        const SizedBox(height: 24),
+        _buildUpgradeButton(context),
       ],
+    );
+  }
+
+  Widget _buildUpgradeButton(BuildContext context) {
+    final authService = Provider.of<AuthService>(context);
+    if (!authService.isAuthenticated) {
+      return const SizedBox.shrink();
+    }
+
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () {
+          Navigator.of(context).pushNamed('/questionnaire');
+        },
+        icon: const Icon(Icons.auto_awesome_outlined, size: 18),
+        label: const Text('UPGRADE TO FULL REPORT'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppTheme.accentGold,
+          side: const BorderSide(color: AppTheme.accentGold),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+      ),
     );
   }
 
