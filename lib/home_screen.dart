@@ -3,6 +3,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/app_theme.dart';
 import 'package:frontend/spend_right_screen.dart';
 import 'package:frontend/retirement_calculator_screen.dart';
+import 'package:frontend/services/auth_service.dart';
+import 'package:provider/provider.dart';
+import 'package:frontend/login_screen.dart';
+import 'package:frontend/payment_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final VoidCallback onStart;
@@ -87,7 +91,18 @@ class HomeScreen extends StatelessWidget {
           SizedBox(
             height: 52,
             child: ElevatedButton(
-              onPressed: onStart,
+              onPressed: () {
+                final auth = Provider.of<AuthService>(context, listen: false);
+                if (!auth.isAuthenticated) {
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => LoginScreen()));
+                  return;
+                }
+                if (!auth.hasCredits) {
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PaymentScreen()));
+                  return;
+                }
+                onStart();
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.accentGold,
                 foregroundColor: AppTheme.primaryNavy,
@@ -206,9 +221,15 @@ class HomeScreen extends StatelessWidget {
                   title: 'Spend Right',
                   subtitle: 'Discover your Golden Number',
                   description: 'See how your income splits between needs, wants, and savings.',
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => SpendRightScreen(
+                  onTap: () {
+                    final auth = Provider.of<AuthService>(context, listen: false);
+                    if (!auth.isAuthenticated) {
+                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => LoginScreen()));
+                      return;
+                    }
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => SpendRightScreen(
                         onNavigateToRetirement: (goldenNumber) {
                           Navigator.of(context).pushReplacement(
                             MaterialPageRoute(
@@ -220,19 +241,27 @@ class HomeScreen extends StatelessWidget {
                         },
                       ),
                     ),
-                  ),
-                ),
+                  );
+                },
+              ),
                 _buildToolCard(
                   context,
                   icon: Icons.show_chart_outlined,
                   title: 'Retirement Calculator',
                   subtitle: 'How much do you really need?',
                   description: 'Gap analysis with step-up SIP to reach your retirement corpus.',
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const RetirementCalculatorScreen(),
-                    ),
-                  ),
+                  onTap: () {
+                    final auth = Provider.of<AuthService>(context, listen: false);
+                    if (!auth.isAuthenticated) {
+                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => LoginScreen()));
+                      return;
+                    }
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const RetirementCalculatorScreen(),
+                      ),
+                    );
+                  },
                 ),
               ];
 
@@ -446,7 +475,18 @@ class HomeScreen extends StatelessWidget {
             SizedBox(
               height: 52,
               child: ElevatedButton(
-                onPressed: onStart,
+                onPressed: () {
+                  final auth = Provider.of<AuthService>(context, listen: false);
+                  if (!auth.isAuthenticated) {
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => LoginScreen()));
+                    return;
+                  }
+                  if (!auth.hasCredits) {
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PaymentScreen()));
+                    return;
+                  }
+                  onStart();
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.accentGold,
                   foregroundColor: AppTheme.primaryNavy,

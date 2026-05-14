@@ -7,6 +7,8 @@ import 'package:frontend/app_theme.dart';
 import 'package:frontend/constants.dart';
 import 'package:frontend/services/auth_service.dart';
 import 'package:provider/provider.dart';
+import 'package:frontend/payment_screen.dart';
+import 'package:frontend/main_app_screen.dart';
 
 /// Spend Right Screen — 4-question lifestyle input with live Golden Number
 /// counter and animated Status Badge (Saver / Balanced / Spender).
@@ -712,7 +714,22 @@ class _SpendRightScreenState extends State<SpendRightScreen>
       width: double.infinity,
       child: OutlinedButton.icon(
         onPressed: () {
-          Navigator.of(context).pushNamed('/questionnaire');
+          if (!authService.hasCredits) {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const PaymentScreen()),
+            );
+          } else {
+            // Navigate to MainAppScreen and start questionnaire (index 1 is upload)
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(
+                builder: (_) => MainAppScreen(
+                  onLogout: () => authService.signOut(),
+                  initialIndex: 1,
+                ),
+              ),
+              (route) => false,
+            );
+          }
         },
         icon: const Icon(Icons.auto_awesome_outlined, size: 18),
         label: const Text('UPGRADE TO FULL REPORT'),

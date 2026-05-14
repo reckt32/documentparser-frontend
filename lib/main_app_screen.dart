@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/upload_screen.dart';
 import 'package:frontend/questionnaire_screen.dart';
+import 'package:frontend/login_screen.dart';
 import 'package:frontend/constants.dart';
 import 'package:frontend/home_screen.dart';
 import 'package:frontend/app_theme.dart';
@@ -9,8 +10,13 @@ import 'package:frontend/services/auth_service.dart';
 
 class MainAppScreen extends StatefulWidget {
   final VoidCallback onLogout;
+  final int initialIndex;
 
-  const MainAppScreen({super.key, required this.onLogout});
+  const MainAppScreen({
+    super.key,
+    required this.onLogout,
+    this.initialIndex = 0,
+  });
 
   @override
   State<MainAppScreen> createState() => _MainAppScreenState();
@@ -21,6 +27,12 @@ class _MainAppScreenState extends State<MainAppScreen> {
   int _selectedIndex = 0;
   int? _questionnaireId;
   Map<String, dynamic>? _prefillData; // from backend analysis/docInsights
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedIndex = widget.initialIndex;
+  }
 
   List<Widget> _screens() {
     print('[MainAppScreen] Building screens with _questionnaireId: $_questionnaireId, _prefillData: $_prefillData');
@@ -278,9 +290,31 @@ class _MainAppScreenState extends State<MainAppScreen> {
         foregroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
-          // Profile button
+          // Profile or Login button
           Builder(
             builder: (buttonContext) {
+              final auth = Provider.of<AuthService>(buttonContext);
+              
+              if (!auth.isAuthenticated) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 16),
+                  child: TextButton(
+                    onPressed: () {
+                      Navigator.of(buttonContext).push(
+                        MaterialPageRoute(builder: (_) => LoginScreen()),
+                      );
+                    },
+                    child: const Text(
+                      'Login / Signup',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                );
+              }
+
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: InkWell(
