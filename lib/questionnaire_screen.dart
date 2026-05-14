@@ -1110,6 +1110,8 @@ if (resp.statusCode == 201) {
       inflationAdjustedCorpus = (netExpense * inflationMultiplier * 12) / 0.05;
     }
     
+    double standardCorpus = (60 - age) * monthlyIncome * 12;
+    
     bool pensionBelowExpenses = desiredPension > 0 && monthlyExpenses > 0 && desiredPension < monthlyExpenses;
     
     return _sectionCard(
@@ -1810,6 +1812,7 @@ if (resp.statusCode == 201) {
     String label, {
     TextInputType keyboard = TextInputType.text,
     bool isPrefilled = false,
+    String? hint,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1818,6 +1821,7 @@ if (resp.statusCode == 201) {
         keyboardType: keyboard,
         decoration: InputDecoration(
           labelText: label,
+          hintText: hint,
           filled: true,
           fillColor: isPrefilled ? const Color(0x14FF0000) : Colors.white,
           enabledBorder: isPrefilled
