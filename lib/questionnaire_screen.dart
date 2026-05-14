@@ -128,6 +128,10 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
     'cash': TextEditingController(),
   };
 
+  // Manual investment override (when CAS is absent)
+  final _manualSipCtrl = TextEditingController();
+  final _manualCorpusCtrl = TextEditingController();
+
   // Estate
   String _willStatus = 'Not Applicable';
   final List<Map<String, TextEditingController>> _nomineeCtrls = [];
@@ -687,6 +691,11 @@ if (resp.statusCode == 201) {
             for (final e in _allocationCtrls.entries)
               if (e.value.text.trim().isNotEmpty) e.key: e.value.text.trim(),
           },
+          // Manual investment overrides (used when CAS is absent)
+          if (_manualSipCtrl.text.trim().isNotEmpty)
+            'manual_sip': _manualSipCtrl.text.trim(),
+          if (_manualCorpusCtrl.text.trim().isNotEmpty)
+            'manual_corpus': _manualCorpusCtrl.text.trim(),
         });
         break;
       case 6:
@@ -1479,6 +1488,51 @@ if (resp.statusCode == 201) {
           isPrefilled: _prefilledFields.contains('alloc_insuranceLinked'),
         ),
         _allocationRow('Cash', _allocationCtrls['cash']!, isPrefilled: _prefilledFields.contains('alloc_cash')),
+
+        // Manual Investment Override section
+        const SizedBox(height: 20),
+        ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          title: Row(
+            children: [
+              Icon(
+                Icons.edit_note_outlined,
+                size: 20,
+                color: AppTheme.accentGold,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Manual Investment Override',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.primaryNavy,
+                ),
+              ),
+            ],
+          ),
+          subtitle: Text(
+            'Use if you don\'t have CAS data',
+            style: TextStyle(
+              fontSize: 12,
+              color: AppTheme.textLight,
+            ),
+          ),
+          children: [
+            const SizedBox(height: 8),
+            _textField(
+              _manualSipCtrl,
+              'Current Monthly SIP (\u20b9)',
+              keyboard: TextInputType.number,
+            ),
+            _textField(
+              _manualCorpusCtrl,
+              'Total Investment Corpus (\u20b9)',
+              keyboard: TextInputType.number,
+            ),
+          ],
+        ),
+
         _saveButton(() {
           _saveSection('lifestyle', {
             'annual_income': _annualIncomeCtrl.text.trim(),
@@ -1493,6 +1547,11 @@ if (resp.statusCode == 201) {
               for (final e in _allocationCtrls.entries)
                 if (e.value.text.trim().isNotEmpty) e.key: e.value.text.trim(),
             },
+            // Manual investment overrides (used when CAS is absent)
+            if (_manualSipCtrl.text.trim().isNotEmpty)
+              'manual_sip': _manualSipCtrl.text.trim(),
+            if (_manualCorpusCtrl.text.trim().isNotEmpty)
+              'manual_corpus': _manualCorpusCtrl.text.trim(),
           });
         }),
       ],

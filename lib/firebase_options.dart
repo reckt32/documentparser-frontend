@@ -71,13 +71,13 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyC17JLgQKMOoRdjypWjwqPZMuAvHsrB9lk',
-    appId: '1:791761849806:web:89493ff3b41f0437a32f9f',
-    messagingSenderId: '791761849806',
-    projectId: 'asfs-929a1',
-    authDomain: 'asfs-929a1.firebaseapp.com',
-    storageBucket: 'asfs-929a1.firebasestorage.app',
-    measurementId: 'G-QZJ9ZBCTMV',
+    apiKey: 'AIzaSyCX-RQQepMHq7svSq0UvufQZ5jmF7am1rI',
+    appId: '1:129301262152:web:cb0259fffe8b65c629cd7d',
+    messagingSenderId: '129301262152',
+    projectId: 'meerkat-49ba6',
+    authDomain: 'meerkat-49ba6.firebaseapp.com',
+    storageBucket: 'meerkat-49ba6.firebasestorage.app',
+    measurementId: 'G-CZRF9WCZ7S',
   );
 
   static const FirebaseOptions android = FirebaseOptions(

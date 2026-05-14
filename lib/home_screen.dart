@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/app_theme.dart';
+import 'package:frontend/spend_right_screen.dart';
+import 'package:frontend/retirement_calculator_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final VoidCallback onStart;
@@ -14,6 +17,8 @@ class HomeScreen extends StatelessWidget {
         children: [
           // Hero section with navy background
           _buildHeroSection(context),
+          // Free Financial Tools
+          _buildFreeToolsSection(context),
           // Features section
           _buildFeaturesSection(context),
           // CTA section
@@ -157,6 +162,184 @@ class HomeScreen extends StatelessWidget {
                 'Receive a comprehensive financial plan based on your complete profile, goals, and risk tolerance.',
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFreeToolsSection(BuildContext context) {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 60),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'FREE TOOLS',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: AppTheme.accentGold,
+                  letterSpacing: 2.0,
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Financial Health Check',
+            style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                  color: AppTheme.primaryNavy,
+                ),
+          ),
+          const SizedBox(height: 8),
+          AppTheme.goldAccentBar(width: 60, height: 2),
+          const SizedBox(height: 12),
+          Text(
+            'Start with these complimentary tools — no documents required.',
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+          const SizedBox(height: 32),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isWide = constraints.maxWidth > 600;
+              final cards = [
+                _buildToolCard(
+                  context,
+                  icon: Icons.pie_chart_outline_outlined,
+                  title: 'Spend Right',
+                  subtitle: 'Discover your Golden Number',
+                  description: 'See how your income splits between needs, wants, and savings.',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => SpendRightScreen(
+                        onNavigateToRetirement: (goldenNumber) {
+                          Navigator.of(context).pushReplacement(
+                            MaterialPageRoute(
+                              builder: (_) => RetirementCalculatorScreen(
+                                initialMonthlyExpense: goldenNumber,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+                _buildToolCard(
+                  context,
+                  icon: Icons.show_chart_outlined,
+                  title: 'Retirement Calculator',
+                  subtitle: 'How much do you really need?',
+                  description: 'Gap analysis with step-up SIP to reach your retirement corpus.',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const RetirementCalculatorScreen(),
+                    ),
+                  ),
+                ),
+              ];
+
+              if (isWide) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: cards[0]),
+                    const SizedBox(width: 20),
+                    Expanded(child: cards[1]),
+                  ],
+                );
+              }
+              return Column(
+                children: [
+                  cards[0],
+                  const SizedBox(height: 16),
+                  cards[1],
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToolCard(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required String description,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: AppTheme.backgroundCream,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: AppTheme.accentGold.withValues(alpha: 0.2),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: AppTheme.accentGold.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(28),
+                ),
+                child: Icon(icon, size: 28, color: AppTheme.accentGold),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: AppTheme.primaryNavy,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: GoogleFonts.dmSans(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: AppTheme.accentGold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              AppTheme.goldAccentBar(width: 40, height: 2),
+              const SizedBox(height: 12),
+              Text(
+                description,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Text(
+                    'Try Free',
+                    style: GoogleFonts.dmSans(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.primaryNavy,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 16,
+                    color: AppTheme.primaryNavy,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
