@@ -252,28 +252,43 @@ class AuthService extends ChangeNotifier {
     _error = null;
 
     try {
-      // Trigger Google Sign-in flow
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      
-      if (googleUser == null) {
+      if (kIsWeb) {
+        // Native Firebase Auth popup for Web — significantly more reliable
+        // than the google_sign_in package for browser environments.
+        final googleProvider = GoogleAuthProvider();
+        
+        // Add required scopes if needed
+        googleProvider.addScope('email');
+        googleProvider.addScope('profile');
+        
+        await _firebaseAuth.signInWithPopup(googleProvider);
+        
         _setLoading(false);
-        return false; // User cancelled
+        return true;
+      } else {
+        // Trigger Google Sign-in flow for mobile
+        final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+        
+        if (googleUser == null) {
+          _setLoading(false);
+          return false; // User cancelled
+        }
+
+        // Get Google auth details
+        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+        // Create Firebase credential
+        final credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
+        );
+
+        // Sign in to Firebase
+        await _firebaseAuth.signInWithCredential(credential);
+        
+        _setLoading(false);
+        return true;
       }
-
-      // Get Google auth details
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-
-      // Create Firebase credential
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      // Sign in to Firebase
-      await _firebaseAuth.signInWithCredential(credential);
-      
-      _setLoading(false);
-      return true;
     } on FirebaseAuthException catch (e) {
       _error = _getAuthErrorMessage(e.code);
       _setLoading(false);
