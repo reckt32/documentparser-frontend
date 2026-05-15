@@ -37,7 +37,7 @@ class AppUser {
 }
 
 /// Authentication Service
-/// 
+///
 /// Manages Firebase authentication state and provides methods for:
 /// - Google Sign-in
 /// - Email/Password authentication
@@ -46,12 +46,13 @@ class AppUser {
 class AuthService extends ChangeNotifier {
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
-  
+
   User? _firebaseUser;
   AppUser? _appUser;
   String? _idToken;
   bool _isLoading = false;
-  bool _isSyncing = false;  // Tracks if backend sync is in progress
+  bool _isSyncing = false; // Tracks if backend sync is in progress
+  bool _hasProcessedInitialAuthState = false;
   String? _error;
 
   // Getters
@@ -62,9 +63,11 @@ class AuthService extends ChangeNotifier {
   bool get hasCredits => (_appUser?.reportCredits ?? 0) > 0;
   int get reportCredits => _appUser?.reportCredits ?? 0;
   bool get isLoading => _isLoading;
-  bool get isSyncing => _isSyncing;  // True while syncing with backend
+  bool get isSyncing => _isSyncing; // True while syncing with backend
+  bool get isInitializing => !_hasProcessedInitialAuthState;
   String? get error => _error;
-  String? get displayName => _appUser?.displayName ?? _firebaseUser?.displayName;
+  String? get displayName =>
+      _appUser?.displayName ?? _firebaseUser?.displayName;
   String? get email => _appUser?.email ?? _firebaseUser?.email;
   String? get photoUrl => _firebaseUser?.photoURL;
 
@@ -77,7 +80,8 @@ class AuthService extends ChangeNotifier {
   /// Prevents race conditions where a stale server response overwrites
   /// optimistic local credits (e.g., after markAsPaid).
   void _updateAppUser(AppUser serverUser) {
-    if (_appUser == null || serverUser.reportCredits >= _appUser!.reportCredits) {
+    if (_appUser == null ||
+        serverUser.reportCredits >= _appUser!.reportCredits) {
       _appUser = serverUser;
     } else {
       // Server has fewer credits than local — keep local credits, update rest
@@ -102,6 +106,7 @@ class AuthService extends ChangeNotifier {
       _appUser = null;
       _idToken = null;
     }
+    _hasProcessedInitialAuthState = true;
     notifyListeners();
   }
 
@@ -115,16 +120,18 @@ class AuthService extends ChangeNotifier {
 
     try {
       _idToken = await _firebaseUser!.getIdToken();
-      
+
       // Add timeout to prevent infinite loading
-      final response = await http.post(
-        Uri.parse('$kBackendUrl/auth/verify'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'id_token': _idToken}),
-      ).timeout(
-        const Duration(seconds: 30),
-        onTimeout: () => throw TimeoutException('Backend sync timed out'),
-      );
+      final response = await http
+          .post(
+            Uri.parse('$kBackendUrl/auth/verify'),
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode({'id_token': _idToken}),
+          )
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () => throw TimeoutException('Backend sync timed out'),
+          );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -152,7 +159,7 @@ class AuthService extends ChangeNotifier {
   }
 
   /// Force refresh payment status with reconciliation fallback
-  /// 
+  ///
   /// Calls /auth/status first. If that shows unpaid, calls /payment/reconcile
   /// to check Razorpay directly and recover if payment exists.
   Future<void> forceRefreshPaymentStatus() async {
@@ -175,10 +182,9 @@ class AuthService extends ChangeNotifier {
       };
 
       // First, get current status from backend
-      var response = await http.get(
-        Uri.parse('$kBackendUrl/auth/status'),
-        headers: headers,
-      ).timeout(const Duration(seconds: 30));
+      var response = await http
+          .get(Uri.parse('$kBackendUrl/auth/status'), headers: headers)
+          .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -193,25 +199,25 @@ class AuthService extends ChangeNotifier {
 
         // Server says unpaid - try reconciliation with Razorpay
         debugPrint('Server shows unpaid, attempting reconciliation...');
-        response = await http.post(
-          Uri.parse('$kBackendUrl/payment/reconcile'),
-          headers: headers,
-        ).timeout(const Duration(seconds: 15));
+        response = await http
+            .post(Uri.parse('$kBackendUrl/payment/reconcile'), headers: headers)
+            .timeout(const Duration(seconds: 15));
 
         if (response.statusCode == 200) {
           final reconcileData = json.decode(response.body);
           if (reconcileData['has_paid'] == true) {
-            debugPrint('Reconciliation found payment! Refreshing state from server.');
+            debugPrint(
+              'Reconciliation found payment! Refreshing state from server.',
+            );
           }
         }
 
         // After reconciliation (whether it found a payment or not),
         // always re-fetch from /auth/status to get complete user data
         // including report_credits
-        response = await http.get(
-          Uri.parse('$kBackendUrl/auth/status'),
-          headers: headers,
-        ).timeout(const Duration(seconds: 15));
+        response = await http
+            .get(Uri.parse('$kBackendUrl/auth/status'), headers: headers)
+            .timeout(const Duration(seconds: 15));
 
         if (response.statusCode == 200) {
           final statusData = json.decode(response.body);
@@ -236,7 +242,7 @@ class AuthService extends ChangeNotifier {
   /// Get fresh ID token for API calls
   Future<String?> getIdToken({bool forceRefresh = false}) async {
     if (_firebaseUser == null) return null;
-    
+
     try {
       _idToken = await _firebaseUser!.getIdToken(forceRefresh);
       return _idToken;
@@ -252,26 +258,31 @@ class AuthService extends ChangeNotifier {
     _error = null;
 
     try {
-      // Trigger Google Sign-in flow
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      
-      if (googleUser == null) {
-        _setLoading(false);
-        return false; // User cancelled
+      if (kIsWeb) {
+        await _firebaseAuth.signInWithPopup(GoogleAuthProvider());
+      } else {
+        // Trigger Google Sign-in flow
+        final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+
+        if (googleUser == null) {
+          _setLoading(false);
+          return false; // User cancelled
+        }
+
+        // Get Google auth details
+        final GoogleSignInAuthentication googleAuth =
+            await googleUser.authentication;
+
+        // Create Firebase credential
+        final credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
+        );
+
+        // Sign in to Firebase
+        await _firebaseAuth.signInWithCredential(credential);
       }
 
-      // Get Google auth details
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-
-      // Create Firebase credential
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      // Sign in to Firebase
-      await _firebaseAuth.signInWithCredential(credential);
-      
       _setLoading(false);
       return true;
     } on FirebaseAuthException catch (e) {
