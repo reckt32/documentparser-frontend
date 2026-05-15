@@ -6,9 +6,13 @@ import 'package:frontend/services/auth_service.dart';
 /// Login Screen
 /// 
 /// Simple Google Sign-In only, optimized for web browsers.
-/// Listens to AuthService and auto-pops when authentication succeeds.
+/// Used as a full-screen overlay managed by parent widget state,
+/// NOT pushed as a Navigator route (to avoid widget tree destruction issues).
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  /// Called when the user wants to dismiss the login screen (e.g. back button).
+  final VoidCallback? onDismiss;
+
+  const LoginScreen({super.key, this.onDismiss});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -17,7 +21,6 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   String? _errorMessage;
-  bool _popScheduled = false; // Guard against scheduling multiple pops
 
   Future<void> _signInWithGoogle() async {
     setState(() {
@@ -29,14 +32,9 @@ class _LoginScreenState extends State<LoginScreen> {
       final authService = Provider.of<AuthService>(context, listen: false);
       final success = await authService.signInWithGoogle();
       
-      if (success && mounted) {
-        if (Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
-        } else {
-          // Fallback for Flutter Web edge cases where the route stack is modified
-          Navigator.of(context).pushReplacementNamed('/');
-        }
-      } else if (!success && mounted) {
+      // No navigation needed here. The parent widget listens to AuthService
+      // and will automatically hide this screen when isAuthenticated becomes true.
+      if (!success && mounted) {
         setState(() {
           _errorMessage = 'Sign-in failed. Please try again.';
         });
@@ -58,9 +56,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       backgroundColor: AppTheme.backgroundCream,
+      // Show a back button to dismiss login if callback provided
+      appBar: widget.onDismiss != null
+          ? AppBar(
+              backgroundColor: AppTheme.backgroundCream,
+              elevation: 0,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_rounded, color: AppTheme.primaryNavy),
+                onPressed: widget.onDismiss,
+              ),
+            )
+          : null,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(32),
@@ -69,13 +77,14 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.center,
-              children: [ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 180, maxWidth: 360),
-            child: Image.asset(
-              'assets/primarylogo.png',
-              fit: BoxFit.contain,
-            ),
-          ),
+              children: [
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 180, maxWidth: 360),
+                  child: Image.asset(
+                    'assets/primarylogo.png',
+                    fit: BoxFit.contain,
+                  ),
+                ),
                 const SizedBox(height: 32),
 
                 // Title

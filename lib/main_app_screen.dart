@@ -28,10 +28,20 @@ class _MainAppScreenState extends State<MainAppScreen> {
   int? _questionnaireId;
   Map<String, dynamic>? _prefillData; // from backend analysis/docInsights
 
+  /// When true, the LoginScreen is shown as a full-screen overlay.
+  /// This uses widget-swapping (like the old AuthWrapper pattern) instead of
+  /// Navigator.push, which avoids the widget tree destruction bug.
+  bool _showLoginOverlay = false;
+
   @override
   void initState() {
     super.initState();
     _selectedIndex = widget.initialIndex;
+  }
+
+  /// Call this to show the login screen. Used by AppBar button, HomeScreen, etc.
+  void showLogin() {
+    setState(() => _showLoginOverlay = true);
   }
 
   List<Widget> _screens() {
@@ -43,6 +53,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
             _selectedIndex = 1; // go to Upload first
           });
         },
+        onLoginRequested: showLogin,
       ),
       UploadScreen(
         questionnaireId: _questionnaireId,
@@ -274,6 +285,24 @@ class _MainAppScreenState extends State<MainAppScreen> {
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
 
+    // Auto-dismiss login overlay when user becomes authenticated
+    if (_showLoginOverlay && authService.isAuthenticated) {
+      // Use addPostFrameCallback to avoid setState during build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() => _showLoginOverlay = false);
+        }
+      });
+    }
+
+    // If login overlay is requested, show LoginScreen as a full-screen widget
+    // (NOT as a Navigator route — this avoids the widget tree destruction bug)
+    if (_showLoginOverlay) {
+      return LoginScreen(
+        onDismiss: () => setState(() => _showLoginOverlay = false),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppTheme.backgroundCream,
       appBar: AppBar(
@@ -299,11 +328,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
                 return Padding(
                   padding: const EdgeInsets.only(right: 16),
                   child: TextButton(
-                    onPressed: () {
-                      Navigator.of(buttonContext).push(
-                        MaterialPageRoute(builder: (_) => LoginScreen()),
-                      );
-                    },
+                    onPressed: showLogin,
                     child: const Text(
                       'Login / Signup',
                       style: TextStyle(

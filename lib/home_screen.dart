@@ -5,13 +5,13 @@ import 'package:frontend/spend_right_screen.dart';
 import 'package:frontend/retirement_calculator_screen.dart';
 import 'package:frontend/services/auth_service.dart';
 import 'package:provider/provider.dart';
-import 'package:frontend/login_screen.dart';
 import 'package:frontend/payment_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final VoidCallback onStart;
+  final VoidCallback onLoginRequested;
 
-  const HomeScreen({super.key, required this.onStart});
+  const HomeScreen({super.key, required this.onStart, required this.onLoginRequested});
 
   @override
   Widget build(BuildContext context) {
@@ -94,7 +94,7 @@ class HomeScreen extends StatelessWidget {
               onPressed: () {
                 final auth = Provider.of<AuthService>(context, listen: false);
                 if (!auth.isAuthenticated) {
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => LoginScreen()));
+                  onLoginRequested();
                   return;
                 }
                 if (!auth.hasCredits) {
@@ -224,7 +224,7 @@ class HomeScreen extends StatelessWidget {
                   onTap: () {
                     final auth = Provider.of<AuthService>(context, listen: false);
                     if (!auth.isAuthenticated) {
-                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => LoginScreen()));
+                      onLoginRequested();
                       return;
                     }
                     Navigator.of(context).push(
@@ -253,7 +253,7 @@ class HomeScreen extends StatelessWidget {
                   onTap: () {
                     final auth = Provider.of<AuthService>(context, listen: false);
                     if (!auth.isAuthenticated) {
-                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => LoginScreen()));
+                      onLoginRequested();
                       return;
                     }
                     Navigator.of(context).push(
@@ -478,7 +478,7 @@ class HomeScreen extends StatelessWidget {
                 onPressed: () {
                   final auth = Provider.of<AuthService>(context, listen: false);
                   if (!auth.isAuthenticated) {
-                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => LoginScreen()));
+                    onLoginRequested();
                     return;
                   }
                   if (!auth.hasCredits) {
