@@ -29,7 +29,14 @@ class _LoginScreenState extends State<LoginScreen> {
       final authService = Provider.of<AuthService>(context, listen: false);
       final success = await authService.signInWithGoogle();
       
-      if (!success && mounted) {
+      if (success && mounted) {
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        } else {
+          // Fallback for Flutter Web edge cases where the route stack is modified
+          Navigator.of(context).pushReplacementNamed('/');
+        }
+      } else if (!success && mounted) {
         setState(() {
           _errorMessage = 'Sign-in failed. Please try again.';
         });
@@ -51,17 +58,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Listen to auth state changes. When the user becomes authenticated
-    // (e.g. after Google sign-in completes), pop this screen.
-    final authService = Provider.of<AuthService>(context);
-    if (authService.isAuthenticated && !_popScheduled) {
-      _popScheduled = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
-        }
-      });
-    }
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundCream,
