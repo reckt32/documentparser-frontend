@@ -17,25 +17,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   String? _errorMessage;
-  bool _didPop = false; // Guard against double-pop
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Reactively pop when auth state becomes authenticated.
-    // This handles the case where AuthWrapper rebuilds (destroying/recreating
-    // the Navigator) as well as normal sign-in completion.
-    final authService = Provider.of<AuthService>(context);
-    if (authService.isAuthenticated && !_didPop && mounted) {
-      _didPop = true;
-      // Use addPostFrameCallback to avoid popping during build
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
-        }
-      });
-    }
-  }
+  bool _popScheduled = false; // Guard against scheduling multiple pops
 
   Future<void> _signInWithGoogle() async {
     setState(() {
@@ -47,8 +29,6 @@ class _LoginScreenState extends State<LoginScreen> {
       final authService = Provider.of<AuthService>(context, listen: false);
       final success = await authService.signInWithGoogle();
       
-      // If sign-in succeeded, didChangeDependencies will handle the pop.
-      // We only need to handle the failure case here.
       if (!success && mounted) {
         setState(() {
           _errorMessage = 'Sign-in failed. Please try again.';
@@ -71,6 +51,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Listen to auth state changes. When the user becomes authenticated
+    // (e.g. after Google sign-in completes), pop this screen.
+    final authService = Provider.of<AuthService>(context);
+    if (authService.isAuthenticated && !_popScheduled) {
+      _popScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+      });
+    }
+
     return Scaffold(
       backgroundColor: AppTheme.backgroundCream,
       body: Center(
