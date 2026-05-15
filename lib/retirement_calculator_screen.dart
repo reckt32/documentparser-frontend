@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -134,22 +135,40 @@ class _RetirementCalculatorScreenState extends State<RetirementCalculatorScreen>
       );
 
       if (resp.statusCode == 200) {
-        final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        setState(() {
-          _result = data;
-          _isLoading = false;
-        });
-        _animateCards();
+        try {
+          final data = jsonDecode(resp.body) as Map<String, dynamic>;
+          setState(() {
+            _result = data;
+            _isLoading = false;
+          });
+          _animateCards();
+        } catch (e) {
+          setState(() {
+            _error = 'Invalid response format (200 but not JSON).';
+            _isLoading = false;
+          });
+        }
       } else {
-        final err = jsonDecode(resp.body);
+        String errorMessage = 'Calculation failed (${resp.statusCode}).';
+        try {
+          final err = jsonDecode(resp.body);
+          errorMessage = err['error'] ?? errorMessage;
+        } catch (_) {
+          // If body is HTML, show a snippet
+          if (resp.body.contains('<html') || resp.body.contains('<!DOCTYPE')) {
+            errorMessage = 'Server error (${resp.statusCode}). Please contact support.';
+            print('HTML Error detected: ${resp.body.substring(0, math.min(resp.body.length, 200))}');
+          }
+        }
         setState(() {
-          _error = err['error'] ?? 'Calculation failed.';
+          _error = errorMessage;
           _isLoading = false;
         });
       }
     } catch (e) {
       setState(() {
-        _error = 'Connection error: $e';
+        _error = 'Connection error. Please check your internet.';
+        print('Connection error detail: $e');
         _isLoading = false;
       });
     }
