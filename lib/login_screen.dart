@@ -27,7 +27,10 @@ class _LoginScreenState extends State<LoginScreen> {
       final authService = Provider.of<AuthService>(context, listen: false);
       final success = await authService.signInWithGoogle();
       
-      if (!success && mounted) {
+      if (success && mounted) {
+        // Pop back to MainAppScreen (which will now reflect authenticated state)
+        Navigator.of(context).pop();
+      } else if (!success && mounted) {
         setState(() {
           _errorMessage = 'Sign-in failed. Please try again.';
         });
