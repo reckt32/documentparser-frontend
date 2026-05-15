@@ -66,6 +66,7 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   final _nameCtrl = TextEditingController();
   final _ageCtrl = TextEditingController();
   final _panCtrl = TextEditingController();
+  String? _panError;
   final _dobCtrl = TextEditingController();
   final _contactCtrl = TextEditingController();
   String _maritalStatus = 'Single';
@@ -155,6 +156,20 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
     } else {
       _fetchLatestQuestionnaireIfAuthenticated();
     }
+    
+    // Add listener to PAN controller to auto-capitalize and clear error on change
+    _panCtrl.addListener(() {
+      final text = _panCtrl.text.toUpperCase();
+      if (_panCtrl.text != text) {
+        _panCtrl.value = _panCtrl.value.copyWith(
+          text: text,
+          selection: TextSelection.collapsed(offset: text.length),
+        );
+      }
+      if (_panError != null) {
+        setState(() => _panError = null);
+      }
+    });
   }
 
   Future<void> _fetchLatestQuestionnaireIfAuthenticated() async {
@@ -631,6 +646,20 @@ if (resp.statusCode == 201) {
     }
   }
 
+  bool _validatePan(String pan) {
+    if (pan.isEmpty) {
+      setState(() => _panError = 'PAN is mandatory');
+      return false;
+    }
+    final panRegex = RegExp(r'^[A-Z]{5}[0-9]{4}[A-Z]$');
+    if (!panRegex.hasMatch(pan)) {
+      setState(() => _panError = 'Invalid PAN format (e.g. ABCDE1234F)');
+      return false;
+    }
+    setState(() => _panError = null);
+    return true;
+  }
+
   Future<void> _saveSection(
     String section,
     Map<String, dynamic> payload,
@@ -871,7 +900,13 @@ if (resp.statusCode == 201) {
       children: [
         _textField(_nameCtrl, 'Name', isPrefilled: _prefilledFields.contains('name')),
         _textField(_ageCtrl, 'Age (years)', keyboard: TextInputType.number, isPrefilled: _prefilledFields.contains('age')),
-        _textField(_panCtrl, 'PAN', isPrefilled: _prefilledFields.contains('pan')),
+        _textField(
+          _panCtrl, 
+          'PAN', 
+          isPrefilled: _prefilledFields.contains('pan'),
+          errorText: _panError,
+          hint: 'ABCDE1234F',
+        ),
         _textField(_dobCtrl, 'Date of Birth (YYYY-MM-DD)', isPrefilled: _prefilledFields.contains('dob')),
         _textField(_contactCtrl, 'Contact (Email/Phone)', isPrefilled: _prefilledFields.contains('contact')),
         _dropdown<String>(
@@ -881,14 +916,16 @@ if (resp.statusCode == 201) {
           onChanged: (v) => setState(() => _maritalStatus = v),
         ),
         _saveButton(() {
-          _saveSection('personal_info', {
-            'name': _nameCtrl.text.trim(),
-            'age': _ageCtrl.text.trim(),
-            'pan': _panCtrl.text.trim(),
-            'dob': _dobCtrl.text.trim(),
-            'contact': _contactCtrl.text.trim(),
-            'marital_status': _maritalStatus,
-          });
+          if (_validatePan(_panCtrl.text.trim())) {
+            _saveSection('personal_info', {
+              'name': _nameCtrl.text.trim(),
+              'age': _ageCtrl.text.trim(),
+              'pan': _panCtrl.text.trim(),
+              'dob': _dobCtrl.text.trim(),
+              'contact': _contactCtrl.text.trim(),
+              'marital_status': _maritalStatus,
+            });
+          }
         }),
       ],
     );
@@ -1813,6 +1850,7 @@ if (resp.statusCode == 201) {
     TextInputType keyboard = TextInputType.text,
     bool isPrefilled = false,
     String? hint,
+    String? errorText,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1830,6 +1868,7 @@ if (resp.statusCode == 201) {
                   borderSide: const BorderSide(color: Color(0x55FF0000), width: 1),
                 )
               : null,
+          errorText: errorText,
         ),
       ),
     );
@@ -2308,6 +2347,9 @@ if (resp.statusCode == 201) {
                   _loading
                       ? null
                       : () async {
+                        if (_stepIndex == 0) {
+                          if (!_validatePan(_panCtrl.text.trim())) return;
+                        }
                         await _autoSaveCurrentSection();
                         setState(() {
                           _stepIndex++;
