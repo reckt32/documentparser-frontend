@@ -133,6 +133,15 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   // Manual investment override (when CAS is absent)
   final _manualSipCtrl = TextEditingController();
   final _manualCorpusCtrl = TextEditingController();
+  bool _useManualOverrides = false;
+
+  // Tax Info
+  String _taxRegime = 'Old';
+  final _deductions80cCtrl = TextEditingController();
+  final _deductions80dCtrl = TextEditingController();
+  final _deductions24cCtrl = TextEditingController();
+  final _deductions80ddCtrl = TextEditingController();
+  final _totalTaxPaidCtrl = TextEditingController();
 
   // Estate
   String _willStatus = 'Not Applicable';
@@ -791,14 +800,24 @@ if (resp.statusCode == 201) {
             for (final e in _allocationCtrls.entries)
               if (e.value.text.trim().isNotEmpty) e.key: e.value.text.trim(),
           },
-          // Manual investment overrides (used when CAS is absent)
-          if (_manualSipCtrl.text.trim().isNotEmpty)
+          // Manual investment overrides (only if explicitly toggled)
+          if (_useManualOverrides && _manualSipCtrl.text.trim().isNotEmpty)
             'manual_sip': _manualSipCtrl.text.trim(),
-          if (_manualCorpusCtrl.text.trim().isNotEmpty)
+          if (_useManualOverrides && _manualCorpusCtrl.text.trim().isNotEmpty)
             'manual_corpus': _manualCorpusCtrl.text.trim(),
         });
         break;
       case 6:
+        await _saveSection('tax_info', {
+          'tax_regime': _taxRegime.toLowerCase(),
+          'deductions_80c': _deductions80cCtrl.text.trim(),
+          'deductions_80d': _deductions80dCtrl.text.trim(),
+          'deductions_24c': _deductions24cCtrl.text.trim(),
+          'deductions_80dd': _deductions80ddCtrl.text.trim(),
+          'total_tax_paid': _totalTaxPaidCtrl.text.trim(),
+        });
+        break;
+      case 7:
         await _saveSection('estate', {
           'will_status': _willStatus,
           'nominees': _nomineeCtrls
@@ -1425,6 +1444,13 @@ if (resp.statusCode == 201) {
         ),
         _saveButton(() {
           if (_loading) return;
+          // Mandatory field validation
+          if (_lossToleranceCtrl.text.trim().isEmpty || _emergencyFundMonthsCtrl.text.trim().isEmpty || _behavior.isEmpty) {
+            setState(() {
+              _statusMessage = 'Please fill out Loss Tolerance %, Emergency Fund Months, and Market Behavior (mandatory).';
+            });
+            return;
+          }
           String lt = _lossToleranceCtrl.text.trim();
           String phY = _primaryHorizonYearsCtrl.text.trim();
           String efm = _emergencyFundMonthsCtrl.text.trim();
@@ -1497,6 +1523,7 @@ if (resp.statusCode == 201) {
           'Term Life Cover (₹)',
           keyboard: TextInputType.number,
           isPrefilled: _prefilledFields.contains('life_cover'),
+          enabled: _hasTermInsuranceConfirmed,
         ),
         CheckboxListTile(
           title: const Text('I already have term life insurance'),
@@ -1511,6 +1538,7 @@ if (resp.statusCode == 201) {
           'Health Cover (₹)',
           keyboard: TextInputType.number,
           isPrefilled: _prefilledFields.contains('health_cover'),
+          enabled: _hasHealthInsuranceConfirmed,
         ),
         CheckboxListTile(
           title: const Text('I already have health insurance'),
@@ -1648,16 +1676,25 @@ if (resp.statusCode == 201) {
             ),
           ),
           children: [
+            CheckboxListTile(
+              title: const Text('Explicitly apply manual investment overrides'),
+              subtitle: const Text('Tick this to override fetched CAS values with the manual inputs below'),
+              value: _useManualOverrides,
+              onChanged: (v) => setState(() => _useManualOverrides = v ?? false),
+              controlAffinity: ListTileControlAffinity.leading,
+            ),
             const SizedBox(height: 8),
             _textField(
               _manualSipCtrl,
               'Current Monthly SIP (\u20b9)',
               keyboard: TextInputType.number,
+              enabled: _useManualOverrides,
             ),
             _textField(
               _manualCorpusCtrl,
               'Total Investment Corpus (\u20b9)',
               keyboard: TextInputType.number,
+              enabled: _useManualOverrides,
             ),
           ],
         ),
@@ -1676,11 +1713,62 @@ if (resp.statusCode == 201) {
               for (final e in _allocationCtrls.entries)
                 if (e.value.text.trim().isNotEmpty) e.key: e.value.text.trim(),
             },
-            // Manual investment overrides (used when CAS is absent)
-            if (_manualSipCtrl.text.trim().isNotEmpty)
+            // Manual investment overrides (only if explicitly toggled)
+            if (_useManualOverrides && _manualSipCtrl.text.trim().isNotEmpty)
               'manual_sip': _manualSipCtrl.text.trim(),
-            if (_manualCorpusCtrl.text.trim().isNotEmpty)
+            if (_useManualOverrides && _manualCorpusCtrl.text.trim().isNotEmpty)
               'manual_corpus': _manualCorpusCtrl.text.trim(),
+          });
+        }),
+      ],
+    );
+  }
+
+  Widget _buildTaxInfo() {
+    final isNewRegime = _taxRegime == 'New';
+    return _sectionCard(
+      title: 'Tax Information',
+      children: [
+        _dropdown<String>(
+          label: 'Tax Regime',
+          value: _taxRegime,
+          items: const ['Old', 'New'],
+          onChanged: (v) => setState(() => _taxRegime = v),
+        ),
+        const SizedBox(height: 8),
+        if (isNewRegime)
+          Container(
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 8),
+            decoration: BoxDecoration(
+              color: Colors.amber.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.amber.shade200),
+            ),
+            child: const Text(
+              'Under the New Tax Regime, most deductions under sections 80C, 80D, 24C, and 80DD are not available.',
+              style: TextStyle(fontSize: 13, color: Colors.black87),
+            ),
+          ),
+        _textField(_deductions80cCtrl, 'Section 80C Deductions (₹)',
+            keyboard: TextInputType.number, enabled: !isNewRegime),
+        _textField(_deductions80dCtrl, 'Section 80D Deductions (₹)',
+            keyboard: TextInputType.number, enabled: !isNewRegime),
+        _textField(_deductions24cCtrl, 'Section 24C Deductions (₹)',
+            keyboard: TextInputType.number, enabled: !isNewRegime),
+        _textField(_deductions80ddCtrl, 'Section 80DD Deductions (₹)',
+            keyboard: TextInputType.number, enabled: !isNewRegime),
+        const SizedBox(height: 8),
+        _textField(_totalTaxPaidCtrl, 'Total Tax Paid (₹)',
+            keyboard: TextInputType.number),
+        _saveButton(() {
+          _saveSection('tax_info', {
+            'tax_regime': _taxRegime.toLowerCase(),
+            'deductions_80c': _deductions80cCtrl.text.trim(),
+            'deductions_80d': _deductions80dCtrl.text.trim(),
+            'deductions_24c': _deductions24cCtrl.text.trim(),
+            'deductions_80dd': _deductions80ddCtrl.text.trim(),
+            'total_tax_paid': _totalTaxPaidCtrl.text.trim(),
           });
         }),
       ],
@@ -1851,23 +1939,31 @@ if (resp.statusCode == 201) {
     bool isPrefilled = false,
     String? hint,
     String? errorText,
+    bool enabled = true,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: TextField(
         controller: c,
+        enabled: enabled,
         keyboardType: keyboard,
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,
           filled: true,
-          fillColor: isPrefilled ? const Color(0x14FF0000) : Colors.white,
+          fillColor: !enabled
+              ? Colors.grey.shade200
+              : (isPrefilled ? const Color(0x14FF0000) : Colors.white),
           enabledBorder: isPrefilled
               ? OutlineInputBorder(
                   borderRadius: BorderRadius.circular(2),
                   borderSide: const BorderSide(color: Color(0x55FF0000), width: 1),
                 )
               : null,
+          disabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(2),
+            borderSide: BorderSide(color: Colors.grey.shade300, width: 1),
+          ),
           errorText: errorText,
         ),
       ),
@@ -1999,6 +2095,7 @@ if (resp.statusCode == 201) {
       _buildRiskProfile(),
       _buildInsurance(),
       _buildLifestyle(),
+      _buildTaxInfo(),
       _buildEstate(),
     ];
   }
@@ -2350,6 +2447,16 @@ if (resp.statusCode == 201) {
                         if (_stepIndex == 0) {
                           if (!_validatePan(_panCtrl.text.trim())) return;
                         }
+                        if (_stepIndex == 3) {
+                          final lossText = _lossToleranceCtrl.text.trim();
+                          final emergencyText = _emergencyFundMonthsCtrl.text.trim();
+                          if (lossText.isEmpty || emergencyText.isEmpty || _behavior.isEmpty) {
+                            setState(() {
+                              _statusMessage = 'Please fill out all mandatory risk profile fields (Loss Tolerance, Emergency Fund Months, Market Behavior).';
+                            });
+                            return;
+                          }
+                        }
                         await _autoSaveCurrentSection();
                         setState(() {
                           _stepIndex++;
@@ -2393,6 +2500,10 @@ if (resp.statusCode == 201) {
     for (final c in _allocationCtrls.values) {
       c.dispose();
     }
+    _manualSipCtrl.dispose();
+    _manualCorpusCtrl.dispose();
+    _desiredMonthlyPensionCtrl.dispose();
+    _availableSavingsCtrl.dispose();
     for (final m in _nomineeCtrls) {
       m['name']!.dispose();
       m['relation']!.dispose();
@@ -2402,6 +2513,11 @@ if (resp.statusCode == 201) {
     _primaryHorizonYearsCtrl.dispose();
     _emergencyFundMonthsCtrl.dispose();
     _equityAllocationCtrl.dispose();
+    _deductions80cCtrl.dispose();
+    _deductions80dCtrl.dispose();
+    _deductions24cCtrl.dispose();
+    _deductions80ddCtrl.dispose();
+    _totalTaxPaidCtrl.dispose();
     super.dispose();
   }
 }
