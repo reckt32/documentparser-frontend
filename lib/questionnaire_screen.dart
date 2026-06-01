@@ -1,11 +1,35 @@
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:frontend/app_theme.dart';
 import 'package:frontend/services/auth_service.dart';
+
+/// Auto-formats a date string as DD-MM-YYYY by inserting dashes
+/// after the second and fifth digit. Strips all non-digit input.
+class _DateInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digitsOnly = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    final limited = digitsOnly.length > 8 ? digitsOnly.substring(0, 8) : digitsOnly;
+    final buf = StringBuffer();
+    for (var i = 0; i < limited.length; i++) {
+      if (i == 2 || i == 4) buf.write('-');
+      buf.write(limited[i]);
+    }
+    final text = buf.toString();
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+}
 
 /// Predefined goal types for financial planning
 const List<String> kGoalTypes = [
@@ -118,7 +142,6 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   final _monthlyEmiCtrl = TextEditingController();
   final _emergencyFundCtrl = TextEditingController();
   final _availableSavingsCtrl = TextEditingController();
-  final _savingsPercentCtrl = TextEditingController();
   String _savingsBand = '';
   final List<String> _currentProducts = [];
   final Map<String, TextEditingController> _allocationCtrls = {
@@ -415,35 +438,36 @@ if (resp.statusCode == 201) {
           }
         } catch (_) {}
       }
-      // Savings %: prefer backend lifestyle. Else ≈ max(0, net cf / inflow * 100)
-      if (_savingsPercentCtrl.text.trim().isEmpty) {
+      // Savings %: prefer backend lifestyle. Else ≈ max(0, net cf / inflow * 100).
+      // Used only to auto-derive the Savings Band dropdown (no input field anymore).
+      if (_savingsBand.isEmpty) {
         try {
+          double? sp;
           if (lfSavingsPct != null) {
-            final sp =
-                (lfSavingsPct is num)
-                    ? lfSavingsPct.toDouble()
-                    : double.tryParse(lfSavingsPct.toString().replaceAll(',', ''));
-            if (sp != null && sp.isFinite) {
-              _savingsPercentCtrl.text = sp.toStringAsFixed(2);
-              _prefilledFields.add('savings_percent');
-              appliedCount++;
-            }
+            sp = (lfSavingsPct is num)
+                ? lfSavingsPct.toDouble()
+                : double.tryParse(lfSavingsPct.toString().replaceAll(',', ''));
           } else if (inflow != null && netcf != null) {
-            final inflowNum =
-                (inflow is num)
-                    ? inflow.toDouble()
-                    : double.tryParse(inflow.toString().replaceAll(',', '')) ??
-                        0.0;
-            final netNum =
-                (netcf is num)
-                    ? netcf.toDouble()
-                    : double.tryParse(netcf.toString().replaceAll(',', '')) ??
-                        0.0;
+            final inflowNum = (inflow is num)
+                ? inflow.toDouble()
+                : double.tryParse(inflow.toString().replaceAll(',', '')) ?? 0.0;
+            final netNum = (netcf is num)
+                ? netcf.toDouble()
+                : double.tryParse(netcf.toString().replaceAll(',', '')) ?? 0.0;
             if (inflowNum > 0) {
-              final sp = (netNum / inflowNum) * 100.0;
-              _savingsPercentCtrl.text = sp.isFinite ? sp.toStringAsFixed(2) : '';
-              if (sp.isFinite) { _prefilledFields.add('savings_percent'); appliedCount++; }
+              sp = (netNum / inflowNum) * 100.0;
             }
+          }
+          if (sp != null && sp.isFinite) {
+            if (sp < 10)
+              _savingsBand = '<10%';
+            else if (sp < 20)
+              _savingsBand = '10-20%';
+            else if (sp < 30)
+              _savingsBand = '20-30%';
+            else
+              _savingsBand = '>30%';
+            changedBand = true;
           }
         } catch (_) {}
       }
@@ -530,20 +554,8 @@ if (resp.statusCode == 201) {
       }
 
       // Optionally mark savings band based on savings percent
-      if (_savingsBand.isEmpty && _savingsPercentCtrl.text.isNotEmpty) {
-        try {
-          final sp = double.tryParse(_savingsPercentCtrl.text) ?? 0.0;
-          if (sp < 10)
-            _savingsBand = '<10%';
-          else if (sp < 20)
-            _savingsBand = '10-20%';
-          else if (sp < 30)
-            _savingsBand = '20-30%';
-          else
-            _savingsBand = '>30%';
-          changedBand = true;
-        } catch (_) {}
-      }
+      // (savings % is no longer collected as a controller; band auto-derivation
+      // happens earlier in this method when backend provides savingsPercent.)
 
       // PAN/name/age prefill from backend personal_info, or ITR/CAS if present in analysis/docInsights (best-effort)
       final personalFromBackend = _toStringDynamicMap(prefill['personal_info']);
@@ -793,7 +805,6 @@ if (resp.statusCode == 201) {
           'monthly_emi': _monthlyEmiCtrl.text.trim(),
           'emergency_fund': _emergencyFundCtrl.text.trim(),
           'available_savings': _availableSavingsCtrl.text.trim(),
-          'savings_percent': _savingsPercentCtrl.text.trim(),
           'savings_band': _savingsBand,
           'products': _currentProducts,
           'allocation': {
@@ -926,7 +937,12 @@ if (resp.statusCode == 201) {
           errorText: _panError,
           hint: 'ABCDE1234F',
         ),
-        _textField(_dobCtrl, 'Date of Birth (YYYY-MM-DD)', isPrefilled: _prefilledFields.contains('dob')),
+        _textField(
+          _dobCtrl,
+          'Date of Birth (DD-MM-YYYY)',
+          isPrefilled: _prefilledFields.contains('dob'),
+          inputFormatters: [_DateInputFormatter()],
+        ),
         _textField(_contactCtrl, 'Contact (Email/Phone)', isPrefilled: _prefilledFields.contains('contact')),
         _dropdown<String>(
           label: 'Marital Status',
@@ -1367,6 +1383,7 @@ if (resp.statusCode == 201) {
               label: 'Goal Importance',
               value: i < _goalImportances.length ? _goalImportances[i] : 'Important',
               items: const ['Essential', 'Important', 'Lifestyle'],
+              tooltip: 'Determine necessity of goal',
               onChanged: (v) => setState(() {
                 if (i < _goalImportances.length) {
                   _goalImportances[i] = v;
@@ -1377,6 +1394,7 @@ if (resp.statusCode == 201) {
               label: 'Goal Flexibility',
               value: i < _goalFlexibilities.length ? _goalFlexibilities[i] : 'Fixed',
               items: const ['Critical', 'Fixed', 'Flexible'],
+              tooltip: 'Determine flexibility of goal amount',
               onChanged: (v) => setState(() {
                 if (i < _goalFlexibilities.length) {
                   _goalFlexibilities[i] = v;
@@ -1561,45 +1579,67 @@ if (resp.statusCode == 201) {
 
 
   Widget _buildLifestyle() {
-    final hasLifestylePrefill = _prefilledFields.intersection({'annual_income', 'monthly_expenses', 'monthly_emi', 'available_savings', 'savings_percent', 'alloc_equity', 'alloc_debt', 'alloc_gold', 'alloc_realEstate', 'alloc_insuranceLinked', 'alloc_cash'}).isNotEmpty;
+    final hasLifestylePrefill = _prefilledFields.intersection({'annual_income', 'monthly_expenses', 'monthly_emi', 'available_savings', 'alloc_equity', 'alloc_debt', 'alloc_gold', 'alloc_realEstate', 'alloc_insuranceLinked', 'alloc_cash'}).isNotEmpty;
     return _sectionCard(
       title: 'Lifestyle & Allocation',
       showPrefillWarning: hasLifestylePrefill,
       children: [
+        // Persistent warning banner at the top of the section.
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: Colors.amber.shade50,
+            border: Border.all(color: Colors.amber.shade300),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.warning_amber_rounded,
+                color: Colors.amber.shade800,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Kindly check all numbers that are input to verify expenses and income numbers.',
+                  style: TextStyle(fontSize: 13, height: 1.4),
+                ),
+              ),
+            ],
+          ),
+        ),
         _textField(
           _annualIncomeCtrl,
-          'Annual Income (₹)',
+          'Net Annual Income (\u20b9)',
           keyboard: TextInputType.number,
           isPrefilled: _prefilledFields.contains('annual_income'),
         ),
         _textField(
           _monthlyExpensesCtrl,
-          'Monthly Expenses (₹)',
+          'Monthly Expenses (\u20b9)',
           keyboard: TextInputType.number,
           isPrefilled: _prefilledFields.contains('monthly_expenses'),
         ),
         _textField(
           _monthlyEmiCtrl,
-          'Monthly EMI (₹)',
+          'Monthly EMI (\u20b9)',
           keyboard: TextInputType.number,
           isPrefilled: _prefilledFields.contains('monthly_emi'),
         ),
         _textField(
           _emergencyFundCtrl,
-          'Emergency Fund (₹)',
+          'Current Emergency Fund (in Rs.)',
           keyboard: TextInputType.number,
         ),
         _textField(
           _availableSavingsCtrl,
-          'Available Savings for Investments/Insurance (₹)',
+          'Available Savings for Investments/Insurance (\u20b9)',
           keyboard: TextInputType.number,
           isPrefilled: _prefilledFields.contains('available_savings'),
-        ),
-        _textField(
-          _savingsPercentCtrl,
-          'Savings % (if known)',
-          keyboard: TextInputType.number,
-          isPrefilled: _prefilledFields.contains('savings_percent'),
         ),
         _dropdown<String>(
           label: 'Savings Band',
@@ -1610,6 +1650,12 @@ if (resp.statusCode == 201) {
                 _savingsBand = v == 'Unknown' ? '' : v;
               }),
         ),
+        const SizedBox(height: 8),
+        const Text(
+          'Select your investments that you hold currently',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+        ),
+        const SizedBox(height: 6),
         Wrap(
           spacing: 8,
           runSpacing: 4,
@@ -1706,7 +1752,6 @@ if (resp.statusCode == 201) {
             'monthly_emi': _monthlyEmiCtrl.text.trim(),
             'emergency_fund': _emergencyFundCtrl.text.trim(),
             'available_savings': _availableSavingsCtrl.text.trim(),
-            'savings_percent': _savingsPercentCtrl.text.trim(),
             'savings_band': _savingsBand,
             'products': _currentProducts,
             'allocation': {
@@ -1940,6 +1985,7 @@ if (resp.statusCode == 201) {
     String? hint,
     String? errorText,
     bool enabled = true,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1947,6 +1993,7 @@ if (resp.statusCode == 201) {
         controller: c,
         enabled: enabled,
         keyboardType: keyboard,
+        inputFormatters: inputFormatters,
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,
@@ -1975,12 +2022,22 @@ if (resp.statusCode == 201) {
     required T value,
     required List<T> items,
     required ValueChanged<T> onChanged,
+    String? tooltip,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: label,
+          suffixIcon: tooltip == null
+              ? null
+              : Tooltip(
+                  message: tooltip,
+                  child: const Icon(
+                    Icons.info_outline,
+                    size: 18,
+                  ),
+                ),
         ),
         child: DropdownButtonHideUnderline(
           child: DropdownButton<T>(
@@ -2302,6 +2359,55 @@ if (resp.statusCode == 201) {
                 ),
               ),
               const SizedBox(height: 60),
+              // Privacy / data-handling footer
+              Container(
+                width: 600,
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.only(bottom: 32),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  border: Border.all(
+                    color: AppTheme.accentGold.withValues(alpha: 0.35),
+                  ),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.shield_outlined,
+                          size: 18,
+                          color: AppTheme.accentGold,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Your Privacy Matters',
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: AppTheme.accentGold,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Your documents are not stored by us. They are processed once to extract '
+                      'financial data and then immediately deleted. You can skip any document type '
+                      'and fill in your details manually here. The information you provide is used '
+                      'only to generate your personalised financial plan and is never shared with '
+                      'third parties. This questionnaire is an educational planning tool, not '
+                      'personalised investment advice.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.85),
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               if (_loading)
                 const SizedBox(
                   width: 32,
@@ -2496,7 +2602,6 @@ if (resp.statusCode == 201) {
     _monthlyExpensesCtrl.dispose();
     _monthlyEmiCtrl.dispose();
     _emergencyFundCtrl.dispose();
-    _savingsPercentCtrl.dispose();
     for (final c in _allocationCtrls.values) {
       c.dispose();
     }
