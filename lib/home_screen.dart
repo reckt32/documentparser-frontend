@@ -6,6 +6,8 @@ import 'package:frontend/retirement_calculator_screen.dart';
 import 'package:frontend/services/auth_service.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/payment_screen.dart';
+import 'package:frontend/screens/dashboard/practice_overview_screen.dart';
+import 'package:frontend/widgets/dashboard_banner.dart';
 
 class HomeScreen extends StatelessWidget {
   final VoidCallback onStart;
@@ -32,10 +34,34 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  /// Renders the token-gated Practice Dashboard banner at the top of the
+  /// home screen. Hidden for unauthenticated visitors (the hero CTA already
+  /// drives them through sign-in).
+  Widget _buildDashboardGate(BuildContext context) {
+    final auth = Provider.of<AuthService>(context);
+    return DashboardBanner(
+      reportCredits: auth.isAuthenticated ? auth.reportCredits : null,
+      onUnlockedTap: () => _openDashboard(context),
+      onLockedTap: () {
+        // Same default snackbar; provided as callback so screens can override
+        // (e.g. a future settings page might deep-link to buy credits).
+      },
+    );
+  }
+
+  void _openDashboard(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const PracticeOverviewScreen(),
+        settings: const RouteSettings(name: '/dashboard'),
+      ),
+    );
+  }
+
   Widget _buildHeroSection(BuildContext context) {
     return Container(
       color: AppTheme.primaryNavy,
-      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 80),
+      padding: const EdgeInsets.fromLTRB(40, 60, 40, 60),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -124,6 +150,11 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
           ),
+          
+          const SizedBox(height: 48),
+          
+          // Practice Dashboard access gate (Task 5)
+          _buildDashboardGate(context),
         ],
       ),
     );

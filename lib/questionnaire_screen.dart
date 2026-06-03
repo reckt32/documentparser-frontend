@@ -2216,7 +2216,13 @@ if (resp.statusCode == 201) {
                                           });
                                         },
                                         icon: const Icon(Icons.edit_note),
-                                        label: const Text('Edit & Regenerate'),
+                                        label: const Text('Edit'),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      OutlinedButton.icon(
+                                        onPressed: () => Navigator.of(context).pop(),
+                                        icon: const Icon(Icons.home),
+                                        label: const Text('Home'),
                                       ),
                                     ],
                                   )

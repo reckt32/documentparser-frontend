@@ -6,6 +6,7 @@ import 'package:frontend/main_app_screen.dart';
 import 'package:frontend/app_theme.dart';
 import 'package:frontend/services/auth_service.dart';
 import 'package:frontend/services/api_service.dart';
+import 'package:frontend/services/dashboard_service.dart';
 import 'package:frontend/services/payment_service.dart';
 import 'package:frontend/firebase_options.dart';
 
@@ -31,6 +32,11 @@ class MyApp extends StatelessWidget {
         // API service depends on AuthService for token management
         ProxyProvider<AuthService, ApiService>(
           update: (_, authService, __) => ApiService(authService),
+        ),
+
+        // Dashboard service wraps the practice dashboard REST endpoints.
+        ProxyProvider<ApiService, DashboardService>(
+          update: (_, api, __) => DashboardService(api),
         ),
 
         // Payment service depends on both AuthService and ApiService

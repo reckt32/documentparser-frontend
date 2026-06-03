@@ -51,6 +51,25 @@ class ApiService {
     }
   }
 
+  /// Make an authenticated PUT request
+  Future<ApiResponse> put(String endpoint, Map<String, dynamic> body) async {
+    final headers = await _getAuthHeaders();
+    if (headers == null) {
+      return ApiResponse.error('Not authenticated', statusCode: 401);
+    }
+
+    try {
+      final response = await http.put(
+        Uri.parse('$kBackendUrl$endpoint'),
+        headers: headers,
+        body: json.encode(body),
+      );
+      return _handleResponse(response);
+    } catch (e) {
+      return ApiResponse.error('Network error: $e');
+    }
+  }
+
   /// Make an unauthenticated POST request
   Future<ApiResponse> postUnauthenticated(String endpoint, Map<String, dynamic> body) async {
     try {
