@@ -162,16 +162,21 @@ class _OverviewBody extends StatelessWidget {
             subtitle:
                 '${overview.activeReportCount} active client '
                 '${overview.activeReportCount == 1 ? "report" : "reports"}',
-            trailing: TextButton.icon(
-              onPressed: onOpenAnnual,
-              icon: const Icon(Icons.bar_chart_rounded, size: 16),
-              label: const Text('Annual impact'),
-              style: TextButton.styleFrom(
-                foregroundColor: AppTheme.primaryNavy,
-                textStyle: GoogleFonts.dmSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.4,
+            trailing: Padding(
+              padding: const EdgeInsets.only(top: 6.0),
+              child: OutlinedButton.icon(
+                onPressed: onOpenAnnual,
+                icon: const Icon(Icons.bar_chart_rounded, size: 16),
+                label: const Text('Annual impact'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.primaryNavy,
+                  side: const BorderSide(color: Color(0xFFE6E0D2)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                  textStyle: GoogleFonts.dmSans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.4,
+                  ),
                 ),
               ),
             ),
@@ -552,6 +557,7 @@ class _TableHeaderRow extends StatelessWidget {
           Expanded(flex: 4, child: Text('CLIENT', style: style)),
           Expanded(flex: 2, child: Text('GENERATED', style: style)),
           Expanded(flex: 2, child: Text('EXPIRES', style: style)),
+          Expanded(flex: 3, child: Text('OPPORTUNITY', style: style)),
           Expanded(flex: 3, child: Text('ACTIONS', style: style)),
         ],
       ),
@@ -648,6 +654,10 @@ class _TableDataRow extends StatelessWidget {
           ),
           Expanded(
             flex: 3,
+            child: _OpportunityCell(report: report),
+          ),
+          Expanded(
+            flex: 3,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
@@ -668,6 +678,124 @@ class _TableDataRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Compact per-client opportunity summary shown in the active reports table.
+/// Shows the total opportunity (cover + SIP) plus a tiny breakdown of the
+/// two most important gaps so the MFD can decide at a glance who to call.
+class _OpportunityCell extends StatelessWidget {
+  final ActiveReport report;
+  const _OpportunityCell({required this.report});
+
+  @override
+  Widget build(BuildContext context) {
+    final total = report.totalOpportunityInr;
+    if (total <= 0 && !report.hasSummary) {
+      return Text(
+        '—',
+        style: GoogleFonts.dmSans(
+          fontSize: 12,
+          color: AppTheme.textLight,
+        ),
+      );
+    }
+    final lifeGap = report.lifeCoverGap?.toDouble() ?? 0;
+    final healthGap = report.healthCoverGap?.toDouble() ?? 0;
+    final sip = report.totalIdealSip?.toDouble() ?? 0;
+    final goalPct = report.goalAchievementPct?.toDouble();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          _formatRupees(total),
+          style: GoogleFonts.dmSans(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.primaryNavy,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          _breakdown(lifeGap: lifeGap, healthGap: healthGap, sip: sip),
+          style: GoogleFonts.dmSans(
+            fontSize: 11,
+            color: AppTheme.textLight,
+            fontWeight: FontWeight.w500,
+            height: 1.35,
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        if (goalPct != null) ...[
+          const SizedBox(height: 4),
+          _GoalProgressBar(pct: goalPct),
+        ],
+      ],
+    );
+  }
+
+  String _breakdown({
+    required double lifeGap,
+    required double healthGap,
+    required double sip,
+  }) {
+    final parts = <String>[];
+    if (lifeGap > 0) parts.add('Life ${_formatRupees(lifeGap)}');
+    if (healthGap > 0) parts.add('Health ${_formatRupees(healthGap)}');
+    if (sip > 0) parts.add('SIP ${_formatRupees(sip)}/mo');
+    if (parts.isEmpty) {
+      return 'On track';
+    }
+    return parts.join(' • ');
+  }
+}
+
+class _GoalProgressBar extends StatelessWidget {
+  final double pct;
+  const _GoalProgressBar({required this.pct});
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = (pct / 100).clamp(0.0, 1.0);
+    final color = pct >= 75
+        ? AppTheme.successGreen
+        : (pct >= 40 ? AppTheme.accentGold : AppTheme.errorRed);
+    return Row(
+      children: [
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: Stack(
+              children: [
+                Container(
+                  height: 4,
+                  color: AppTheme.borderLight.withValues(alpha: 0.5),
+                ),
+                FractionallySizedBox(
+                  widthFactor: ratio,
+                  child: Container(
+                    height: 4,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          '${pct.toStringAsFixed(0)}% goal',
+          style: GoogleFonts.dmSans(
+            fontSize: 10,
+            color: color,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.4,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -773,6 +901,10 @@ class _MobileCard extends StatelessWidget {
               _ExpiryChip(days: days),
             ],
           ),
+          if (report.hasSummary || report.totalOpportunityInr > 0) ...[
+            const SizedBox(height: 10),
+            _OpportunityCell(report: report),
+          ],
           const SizedBox(height: 12),
           Row(
             children: [

@@ -169,6 +169,8 @@ class _ClientBody extends StatelessWidget {
           const SizedBox(height: 28),
           _DimensionsPanel(snapshot: detail.snapshot),
           const SizedBox(height: 28),
+          _ProtectionSummary(snapshot: detail.snapshot),
+          const SizedBox(height: 28),
           _ActionItemsSection(
             items: detail.actionItems,
             isConverted: isConverted,
@@ -605,6 +607,289 @@ class _DimensionCell extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Protection summary
+// ---------------------------------------------------------------------------
+
+/// Compact panel showing per-client protection + emergency-fund gap values
+/// from the new enriched snapshot. Keeps the MFD grounded in actual numbers
+/// rather than relying on the dimension labels alone.
+class _ProtectionSummary extends StatelessWidget {
+  final ClientSnapshot? snapshot;
+  const _ProtectionSummary({required this.snapshot});
+
+  @override
+  Widget build(BuildContext context) {
+    final snap = snapshot;
+    if (snap == null) return const SizedBox.shrink();
+    final p = snap.protection;
+    final l = snap.liquidityDetail;
+    final alloc = snap.allocationSummary;
+
+    // If the snapshot has no enriched data (older reports), don't render.
+    final hasProtection =
+        p.lifeCoverRequired != null || p.healthCoverRecommended != null;
+    final hasLiquidity = l.emergencyFundTargetInr != null;
+    final hasAllocation = alloc.totalIdealSip != null;
+    if (!hasProtection && !hasLiquidity && !hasAllocation) {
+      return const SizedBox.shrink();
+    }
+
+    return GlassPanel(
+      padding: const EdgeInsets.fromLTRB(28, 22, 28, 26),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Coverage & savings gaps',
+            style: GoogleFonts.playfairDisplay(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.primaryNavy,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Actual rupee amounts identified by the analysis',
+            style: GoogleFonts.dmSans(
+              fontSize: 13,
+              color: AppTheme.textLight,
+            ),
+          ),
+          const SizedBox(height: 18),
+          LayoutBuilder(
+            builder: (context, c) {
+              final isWide = c.maxWidth > 720;
+              final cards = <Widget>[
+                if (hasProtection) _ProtectionCard(protection: p),
+                if (hasLiquidity) _EmergencyFundCard(liquidity: l),
+                if (hasAllocation) _SipSummaryCard(allocation: alloc),
+              ];
+              if (isWide) {
+                final w = (c.maxWidth - 32) / cards.length.clamp(1, 3);
+                return Wrap(
+                  spacing: 16,
+                  runSpacing: 16,
+                  children: cards
+                      .map((c) => SizedBox(width: w, child: c))
+                      .toList(),
+                );
+              }
+              return Column(
+                children: cards
+                    .map((c) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: c,
+                        ))
+                    .toList(),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProtectionCard extends StatelessWidget {
+  final ProtectionDetail protection;
+  const _ProtectionCard({required this.protection});
+
+  @override
+  Widget build(BuildContext context) {
+    final lifeGap = protection.lifeCoverGap?.toDouble() ?? 0;
+    final healthGap = protection.healthCoverGap?.toDouble() ?? 0;
+    final provMonthly = protection.insuranceProvisionMonthly?.toDouble() ?? 0;
+    return _SummaryCard(
+      title: 'Protection',
+      accent: AppTheme.errorRed,
+      rows: [
+        _SummaryRow(
+          label: 'Life cover gap',
+          value: lifeGap > 0 ? _formatRupeesShort(lifeGap) : 'Adequate',
+          valueColor: lifeGap > 0 ? AppTheme.errorRed : AppTheme.successGreen,
+        ),
+        _SummaryRow(
+          label: 'Health cover gap',
+          value: healthGap > 0 ? _formatRupeesShort(healthGap) : 'Adequate',
+          valueColor: healthGap > 0 ? AppTheme.errorRed : AppTheme.successGreen,
+        ),
+        if (provMonthly > 0)
+          _SummaryRow(
+            label: 'Insurance provision',
+            value: '${_formatRupeesShort(provMonthly)}/mo',
+            valueColor: AppTheme.textDark,
+          ),
+      ],
+    );
+  }
+}
+
+class _EmergencyFundCard extends StatelessWidget {
+  final LiquidityDetail liquidity;
+  const _EmergencyFundCard({required this.liquidity});
+
+  @override
+  Widget build(BuildContext context) {
+    final gap = liquidity.emergencyFundGapInr?.toDouble() ?? 0;
+    final months = liquidity.monthsCovered?.toDouble();
+    final target = liquidity.emergencyFundTargetInr?.toDouble() ?? 0;
+    return _SummaryCard(
+      title: 'Emergency fund',
+      accent: const Color(0xFF3F88C5),
+      rows: [
+        _SummaryRow(
+          label: 'Months covered',
+          value: months != null ? '${months.toStringAsFixed(1)} mo' : '—',
+          valueColor: AppTheme.textDark,
+        ),
+        _SummaryRow(
+          label: 'Target',
+          value: target > 0 ? _formatRupeesShort(target) : '—',
+          valueColor: AppTheme.textDark,
+        ),
+        _SummaryRow(
+          label: 'Gap',
+          value: gap > 0 ? _formatRupeesShort(gap) : 'Funded',
+          valueColor: gap > 0 ? AppTheme.errorRed : AppTheme.successGreen,
+        ),
+      ],
+    );
+  }
+}
+
+class _SipSummaryCard extends StatelessWidget {
+  final AllocationSummary allocation;
+  const _SipSummaryCard({required this.allocation});
+
+  @override
+  Widget build(BuildContext context) {
+    final ideal = allocation.totalIdealSip?.toDouble() ?? 0;
+    final allocated = allocation.totalAllocatedSip?.toDouble() ?? 0;
+    final pct = allocation.goalAchievementPct?.toDouble();
+    final color = pct == null
+        ? AppTheme.textLight
+        : (pct >= 75
+            ? AppTheme.successGreen
+            : (pct >= 40 ? AppTheme.accentGold : AppTheme.errorRed));
+    return _SummaryCard(
+      title: 'Goal SIPs',
+      accent: AppTheme.accentGold,
+      rows: [
+        _SummaryRow(
+          label: 'Ideal SIP',
+          value: ideal > 0 ? '${_formatRupeesShort(ideal)}/mo' : '—',
+          valueColor: AppTheme.textDark,
+        ),
+        _SummaryRow(
+          label: 'Allocated SIP',
+          value: allocated > 0 ? '${_formatRupeesShort(allocated)}/mo' : '—',
+          valueColor: AppTheme.textDark,
+        ),
+        if (pct != null)
+          _SummaryRow(
+            label: 'Goal achievement',
+            value: '${pct.toStringAsFixed(0)}%',
+            valueColor: color,
+          ),
+      ],
+    );
+  }
+}
+
+class _SummaryCard extends StatelessWidget {
+  final String title;
+  final Color accent;
+  final List<_SummaryRow> rows;
+  const _SummaryCard({
+    required this.title,
+    required this.accent,
+    required this.rows,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: AppTheme.backgroundCream,
+        borderRadius: BorderRadius.circular(2),
+        border: Border.all(color: const Color(0xFFE6E0D2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 4,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: accent,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: GoogleFonts.dmSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.primaryNavy,
+                  letterSpacing: 0.4,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          for (final r in rows) ...[
+            r,
+            if (r != rows.last) const SizedBox(height: 6),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? valueColor;
+  const _SummaryRow({
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: GoogleFonts.dmSans(
+              fontSize: 12,
+              color: AppTheme.textLight,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        Text(
+          value,
+          style: GoogleFonts.dmSans(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: valueColor ?? AppTheme.primaryNavy,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1090,15 +1375,45 @@ String _formatValue(ActionItem item) {
   final v = item.valueNum;
   if (v == null) return '';
   switch (item.valueType) {
+    // ---- Legacy value types (kept for backward compat) ----
     case 'required_life_cover_inr':
-      return 'Cover: ₹${(v / 100000).toStringAsFixed(1)} L';
+      return 'Cover: ${_formatRupeesShort(v.toDouble())}';
     case 'emergency_fund_months':
       return '${v.toStringAsFixed(1)} months';
     case 'emi_to_income_pct':
       return '${v.toStringAsFixed(0)}% EMI';
+    // ---- New (post-rewrite) value types ----
+    case 'life_cover_gap_inr':
+      return 'Gap: ${_formatRupeesShort(v.toDouble())}';
+    case 'health_cover_gap_inr':
+      return 'Gap: ${_formatRupeesShort(v.toDouble())}';
+    case 'emergency_fund_gap_inr':
+      return 'Gap: ${_formatRupeesShort(v.toDouble())}';
+    case 'monthly_emi_inr':
+      return '${_formatRupeesShort(v.toDouble())} EMI/mo';
+    case 'monthly_surplus_inr':
+      return '${_formatRupeesShort(v.toDouble())} surplus/mo';
+    case 'sip_amount_inr':
+      return '${_formatRupeesShort(v.toDouble())} SIP/mo';
+    case 'tax_saving_potential_inr':
+      return '${_formatRupeesShort(v.toDouble())} tax save/yr';
     case 'ihs_score':
       return 'Score: ${v.toStringAsFixed(0)}';
     default:
       return v.toStringAsFixed(0);
   }
+}
+
+String _formatRupeesShort(double amount) {
+  if (amount <= 0) return '₹0';
+  if (amount >= 1e7) {
+    return '₹${(amount / 1e7).toStringAsFixed(2)} Cr';
+  }
+  if (amount >= 1e5) {
+    return '₹${(amount / 1e5).toStringAsFixed(1)} L';
+  }
+  if (amount >= 1e3) {
+    return '₹${(amount / 1e3).toStringAsFixed(1)} K';
+  }
+  return '₹${amount.toStringAsFixed(0)}';
 }

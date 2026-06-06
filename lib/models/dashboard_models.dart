@@ -95,6 +95,16 @@ class ActiveReport {
   final String? pdfFilename;
   final String? status;
 
+  // Per-client summary populated from snapshot_json on the backend.
+  final num? healthScore;
+  final String? healthLabel;
+  final String? riskProfile;
+  final num? lifeCoverGap;
+  final num? healthCoverGap;
+  final num? totalIdealSip;
+  final num? goalAchievementPct;
+  final int goalCount;
+
   const ActiveReport({
     required this.clientPan,
     this.id,
@@ -103,6 +113,14 @@ class ActiveReport {
     this.expiresAt,
     this.pdfFilename,
     this.status,
+    this.healthScore,
+    this.healthLabel,
+    this.riskProfile,
+    this.lifeCoverGap,
+    this.healthCoverGap,
+    this.totalIdealSip,
+    this.goalAchievementPct,
+    this.goalCount = 0,
   });
 
   factory ActiveReport.fromJson(Map<String, dynamic> json) {
@@ -114,6 +132,24 @@ class ActiveReport {
       expiresAt: json['expires_at']?.toString(),
       pdfFilename: json['pdf_filename']?.toString(),
       status: json['status']?.toString(),
+      healthScore: json['health_score'] is num
+          ? json['health_score'] as num
+          : null,
+      healthLabel: json['health_label']?.toString(),
+      riskProfile: json['risk_profile']?.toString(),
+      lifeCoverGap: json['life_cover_gap'] is num
+          ? json['life_cover_gap'] as num
+          : null,
+      healthCoverGap: json['health_cover_gap'] is num
+          ? json['health_cover_gap'] as num
+          : null,
+      totalIdealSip: json['total_ideal_sip'] is num
+          ? json['total_ideal_sip'] as num
+          : null,
+      goalAchievementPct: json['goal_achievement_pct'] is num
+          ? json['goal_achievement_pct'] as num
+          : null,
+      goalCount: _asInt(json['goal_count']),
     );
   }
 
@@ -132,6 +168,19 @@ class ActiveReport {
   /// Display name, falls back to PAN if name is missing.
   String get displayName =>
       (clientName == null || clientName!.isEmpty) ? clientPan : clientName!;
+
+  /// Sum of cover + SIP opportunity in rupees. Used to give a single
+  /// "what this client needs" number on the overview list.
+  double get totalOpportunityInr {
+    double total = 0;
+    if (lifeCoverGap != null) total += lifeCoverGap!.toDouble();
+    if (healthCoverGap != null) total += healthCoverGap!.toDouble();
+    if (totalIdealSip != null) total += totalIdealSip!.toDouble();
+    return total;
+  }
+
+  /// True when backend couldn't produce a per-client summary (older reports).
+  bool get hasSummary => healthScore != null || lifeCoverGap != null;
 }
 
 /// ------------------------------------------------------------------
@@ -206,6 +255,150 @@ class DimensionScore {
 }
 
 @immutable
+class ProtectionDetail {
+  final num? lifeCoverCurrent;
+  final num? lifeCoverRequired;
+  final num? lifeCoverGap;
+  final num? healthCoverCurrent;
+  final num? healthCoverRecommended;
+  final num? healthCoverGap;
+  final num? insuranceProvisionMonthly;
+
+  const ProtectionDetail({
+    this.lifeCoverCurrent,
+    this.lifeCoverRequired,
+    this.lifeCoverGap,
+    this.healthCoverCurrent,
+    this.healthCoverRecommended,
+    this.healthCoverGap,
+    this.insuranceProvisionMonthly,
+  });
+
+  factory ProtectionDetail.fromJson(Map<String, dynamic> json) {
+    return ProtectionDetail(
+      lifeCoverCurrent: _asNum(json['life_cover_current']),
+      lifeCoverRequired: _asNum(json['life_cover_required']),
+      lifeCoverGap: _asNum(json['life_cover_gap']),
+      healthCoverCurrent: _asNum(json['health_cover_current']),
+      healthCoverRecommended: _asNum(json['health_cover_recommended']),
+      healthCoverGap: _asNum(json['health_cover_gap']),
+      insuranceProvisionMonthly: _asNum(json['insurance_provision_monthly']),
+    );
+  }
+}
+
+@immutable
+class FinancialsDetail {
+  final num? annualIncome;
+  final num? monthlyExpenses;
+  final num? monthlyEmi;
+  final num? monthlySurplus;
+
+  const FinancialsDetail({
+    this.annualIncome,
+    this.monthlyExpenses,
+    this.monthlyEmi,
+    this.monthlySurplus,
+  });
+
+  factory FinancialsDetail.fromJson(Map<String, dynamic> json) {
+    return FinancialsDetail(
+      annualIncome: _asNum(json['annual_income']),
+      monthlyExpenses: _asNum(json['monthly_expenses']),
+      monthlyEmi: _asNum(json['monthly_emi']),
+      monthlySurplus: _asNum(json['monthly_surplus']),
+    );
+  }
+}
+
+@immutable
+class LiquidityDetail {
+  final num? monthsCovered;
+  final num? emergencyFundTargetInr;
+  final num? emergencyFundCurrentInr;
+  final num? emergencyFundGapInr;
+
+  const LiquidityDetail({
+    this.monthsCovered,
+    this.emergencyFundTargetInr,
+    this.emergencyFundCurrentInr,
+    this.emergencyFundGapInr,
+  });
+
+  factory LiquidityDetail.fromJson(Map<String, dynamic> json) {
+    return LiquidityDetail(
+      monthsCovered: _asNum(json['months_covered']),
+      emergencyFundTargetInr: _asNum(json['emergency_fund_target_inr']),
+      emergencyFundCurrentInr: _asNum(json['emergency_fund_current_inr']),
+      emergencyFundGapInr: _asNum(json['emergency_fund_gap_inr']),
+    );
+  }
+}
+
+@immutable
+class GoalSummaryEntry {
+  final String? name;
+  final num? allocatedSip;
+  final num? idealSip;
+  final num? shortfall;
+  final num? targetAmount;
+  final num? horizonYears;
+  final String? fundType;
+  final String? riskCategory;
+
+  const GoalSummaryEntry({
+    this.name,
+    this.allocatedSip,
+    this.idealSip,
+    this.shortfall,
+    this.targetAmount,
+    this.horizonYears,
+    this.fundType,
+    this.riskCategory,
+  });
+
+  factory GoalSummaryEntry.fromJson(Map<String, dynamic> json) {
+    return GoalSummaryEntry(
+      name: json['name']?.toString(),
+      allocatedSip: _asNum(json['allocated_sip']),
+      idealSip: _asNum(json['ideal_sip']),
+      shortfall: _asNum(json['shortfall']),
+      targetAmount: _asNum(json['target_amount']),
+      horizonYears: _asNum(json['horizon_years']),
+      fundType: json['fund_type']?.toString(),
+      riskCategory: json['risk_category']?.toString(),
+    );
+  }
+}
+
+@immutable
+class AllocationSummary {
+  final num? totalIdealSip;
+  final num? totalAllocatedSip;
+  final num? goalAchievementPct;
+  final num? existingSipRunning;
+  final num? totalInvesting;
+
+  const AllocationSummary({
+    this.totalIdealSip,
+    this.totalAllocatedSip,
+    this.goalAchievementPct,
+    this.existingSipRunning,
+    this.totalInvesting,
+  });
+
+  factory AllocationSummary.fromJson(Map<String, dynamic> json) {
+    return AllocationSummary(
+      totalIdealSip: _asNum(json['total_ideal_sip']),
+      totalAllocatedSip: _asNum(json['total_allocated_sip']),
+      goalAchievementPct: _asNum(json['goal_achievement_pct']),
+      existingSipRunning: _asNum(json['existing_sip_running']),
+      totalInvesting: _asNum(json['total_investing']),
+    );
+  }
+}
+
+@immutable
 class ClientSnapshot {
   final String? clientName;
   final num? clientAge;
@@ -217,6 +410,11 @@ class ClientSnapshot {
   final List<String> flags;
   final List<String> recommendations;
   final String? generatedAt;
+  final FinancialsDetail financials;
+  final ProtectionDetail protection;
+  final LiquidityDetail liquidityDetail;
+  final AllocationSummary allocationSummary;
+  final List<GoalSummaryEntry> goalSummary;
 
   const ClientSnapshot({
     this.clientName,
@@ -229,6 +427,11 @@ class ClientSnapshot {
     this.flags = const [],
     this.recommendations = const [],
     this.generatedAt,
+    this.financials = const FinancialsDetail(),
+    this.protection = const ProtectionDetail(),
+    this.liquidityDetail = const LiquidityDetail(),
+    this.allocationSummary = const AllocationSummary(),
+    this.goalSummary = const [],
   });
 
   factory ClientSnapshot.fromJson(Map<String, dynamic> json) {
@@ -242,6 +445,15 @@ class ClientSnapshot {
         }
       });
     }
+
+    final goalsRaw = json['goal_summary'];
+    final goals = (goalsRaw is List)
+        ? goalsRaw
+            .whereType<Map>()
+            .map((g) =>
+                GoalSummaryEntry.fromJson(g.cast<String, dynamic>()))
+            .toList()
+        : const <GoalSummaryEntry>[];
 
     return ClientSnapshot(
       clientName: json['client_name']?.toString(),
@@ -263,6 +475,20 @@ class ClientSnapshot {
           (json['recommendations'] as List?)?.map((e) => e.toString()).toList() ??
               const [],
       generatedAt: json['generated_at']?.toString(),
+      financials: FinancialsDetail.fromJson(
+        (json['financials'] as Map?)?.cast<String, dynamic>() ?? const {},
+      ),
+      protection: ProtectionDetail.fromJson(
+        (json['protection'] as Map?)?.cast<String, dynamic>() ?? const {},
+      ),
+      liquidityDetail: LiquidityDetail.fromJson(
+        (json['liquidity_detail'] as Map?)?.cast<String, dynamic>() ?? const {},
+      ),
+      allocationSummary: AllocationSummary.fromJson(
+        (json['allocation_summary'] as Map?)?.cast<String, dynamic>() ??
+            const {},
+      ),
+      goalSummary: goals,
     );
   }
 }
@@ -434,4 +660,11 @@ int _asInt(dynamic v) {
   if (v is num) return v.toInt();
   if (v is String) return int.tryParse(v) ?? 0;
   return 0;
+}
+
+num? _asNum(dynamic v) {
+  if (v == null) return null;
+  if (v is num) return v;
+  if (v is String) return num.tryParse(v);
+  return null;
 }
