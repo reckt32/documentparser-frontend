@@ -4,6 +4,7 @@ import 'package:frontend/models/dashboard_models.dart';
 import 'package:frontend/screens/dashboard/widgets/dashboard_widgets.dart';
 import 'package:frontend/services/dashboard_service.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:frontend/constants.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -46,11 +47,8 @@ class _PracticeOverviewScreenState extends State<PracticeOverviewScreen> {
   }
 
   Future<void> _downloadPdf(String filename) async {
-    // The dashboard backend stores PDFs under /output/<filename>; we don't have
-    // a signed URL route in the spec, so we attempt a direct fetch.
-    final uri = Uri.parse(
-      'https://meerkat-bpcddrgqd3hrd5c6.centralindia-01.azurewebsites.net/output/$filename',
-    );
+    // The dashboard backend serves PDFs under /download/<filename>.
+    final uri = Uri.parse('$kBackendUrl/download/$filename');
     final ok = await canLaunchUrl(uri);
     if (!ok) return;
     await launchUrl(uri, mode: LaunchMode.externalApplication);
