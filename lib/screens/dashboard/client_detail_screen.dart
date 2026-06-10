@@ -1387,6 +1387,12 @@ String _formatValue(ActionItem item) {
       return 'Gap: ${_formatRupeesShort(v.toDouble())}';
     case 'health_cover_gap_inr':
       return 'Gap: ${_formatRupeesShort(v.toDouble())}';
+    case 'life_premium_monthly_inr':
+      return 'Prem: ${_formatRupeesShort(v.toDouble())}/mo';
+    case 'health_premium_monthly_inr':
+      return 'Prem: ${_formatRupeesShort(v.toDouble())}/mo';
+    case 'rebalance_shift_inr':
+      return 'Shift: ${_formatRupeesShort(v.toDouble())}';
     case 'emergency_fund_gap_inr':
       return 'Gap: ${_formatRupeesShort(v.toDouble())}';
     case 'monthly_emi_inr':
