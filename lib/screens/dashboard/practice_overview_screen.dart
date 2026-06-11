@@ -72,6 +72,28 @@ class _PracticeOverviewScreenState extends State<PracticeOverviewScreen> {
     );
   }
 
+  void _openCategory(BuildContext context, CategoryMetric metric) {
+    final svc = context.read<DashboardService>();
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => CategoryBreakdownSheet(
+        metric: metric,
+        breakdownFuture: svc.getCategoryBreakdown(metric.dimension),
+        onOpenClient: (pan) {
+          Navigator.of(context).pop();
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ClientDetailScreen(clientPan: pan),
+              settings: RouteSettings(name: '/dashboard/client/$pan'),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -120,6 +142,7 @@ class _PracticeOverviewScreenState extends State<PracticeOverviewScreen> {
               onOpenClient: (r) => _openClient(context, r),
               onDownload: (f) => _downloadPdf(f),
               onOpenAnnual: () => _openAnnual(context),
+              onOpenCategory: (m) => _openCategory(context, m),
             );
           },
         ),
@@ -137,12 +160,14 @@ class _OverviewBody extends StatelessWidget {
   final void Function(ActiveReport) onOpenClient;
   final void Function(String filename) onDownload;
   final VoidCallback onOpenAnnual;
+  final void Function(CategoryMetric) onOpenCategory;
 
   const _OverviewBody({
     required this.overview,
     required this.onOpenClient,
     required this.onDownload,
     required this.onOpenAnnual,
+    required this.onOpenCategory,
   });
 
   @override
@@ -184,7 +209,10 @@ class _OverviewBody extends StatelessWidget {
           _AggregateMetricsRow(metrics: metrics),
           const SizedBox(height: 36),
           // Category progress bars
-          _CategoryProgress(categories: metrics.categories),
+          _CategoryProgress(
+            categories: metrics.categories,
+            onTapCategory: onOpenCategory,
+          ),
           const SizedBox(height: 36),
           // Active reports table
           _SectionHeader(
@@ -276,7 +304,11 @@ class _AggregateMetricsRow extends StatelessWidget {
 
 class _CategoryProgress extends StatelessWidget {
   final List<CategoryMetric> categories;
-  const _CategoryProgress({required this.categories});
+  final void Function(CategoryMetric) onTapCategory;
+  const _CategoryProgress({
+    required this.categories,
+    required this.onTapCategory,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -306,7 +338,7 @@ class _CategoryProgress extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Opportunity value (₹) across practice categories',
+            'Opportunity value (₹) across practice categories — tap a category to see the client breakdown',
             style: GoogleFonts.dmSans(
               fontSize: 13,
               color: AppTheme.textLight,
@@ -317,6 +349,7 @@ class _CategoryProgress extends StatelessWidget {
             _CategoryRow(
               metric: categories[i],
               maxValue: maxVal,
+              onTap: () => onTapCategory(categories[i]),
             ),
             if (i != categories.length - 1) const SizedBox(height: 18),
           ],
@@ -329,12 +362,20 @@ class _CategoryProgress extends StatelessWidget {
 class _CategoryRow extends StatelessWidget {
   final CategoryMetric metric;
   final double maxValue;
-  const _CategoryRow({required this.metric, required this.maxValue});
+  final VoidCallback onTap;
+  const _CategoryRow({
+    required this.metric,
+    required this.maxValue,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     final progress = maxValue <= 0 ? 0.0 : (metric.totalOpportunity / maxValue);
-    return Column(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
@@ -365,6 +406,12 @@ class _CategoryRow extends StatelessWidget {
                 fontWeight: FontWeight.w700,
                 color: AppTheme.primaryNavy,
               ),
+            ),
+            const SizedBox(width: 6),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: AppTheme.textLight,
             ),
           ],
         ),
@@ -428,6 +475,7 @@ class _CategoryRow extends StatelessWidget {
           ],
         ),
       ],
+      ),
     );
   }
 }
@@ -458,6 +506,267 @@ String _prettify(String dim) {
       .where((p) => p.isNotEmpty)
       .map((p) => p[0].toUpperCase() + p.substring(1))
       .join(' ');
+}
+
+// ---------------------------------------------------------------------------
+// Category client-breakdown sheet
+// ---------------------------------------------------------------------------
+
+/// Bottom sheet shown when a category row (e.g. Protection) is tapped.
+/// Lists every client contributing to the category total and their amount,
+/// with a tap-through to the client detail screen.
+class CategoryBreakdownSheet extends StatelessWidget {
+  final CategoryMetric metric;
+  final Future<DashboardResult<CategoryBreakdown>> breakdownFuture;
+  final void Function(String clientPan) onOpenClient;
+
+  const CategoryBreakdownSheet({
+    super.key,
+    required this.metric,
+    required this.breakdownFuture,
+    required this.onOpenClient,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final maxHeight = MediaQuery.of(context).size.height * 0.75;
+    final color = _categoryColor(metric.dimension);
+    return Container(
+      constraints: BoxConstraints(maxHeight: maxHeight),
+      decoration: const BoxDecoration(
+        color: AppTheme.backgroundCream,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppTheme.borderLight,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 18, 24, 14),
+              child: Row(
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _prettify(metric.dimension),
+                          style: GoogleFonts.playfairDisplay(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.primaryNavy,
+                          ),
+                        ),
+                        Text(
+                          'Clients contributing to this category',
+                          style: GoogleFonts.dmSans(
+                            fontSize: 12,
+                            color: AppTheme.textLight,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    _formatRupees(metric.totalOpportunity),
+                    style: GoogleFonts.dmSans(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.primaryNavy,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: Color(0xFFEAE6DE)),
+            Flexible(
+              child: FutureBuilder<DashboardResult<CategoryBreakdown>>(
+                future: breakdownFuture,
+                builder: (context, snap) {
+                  if (snap.connectionState == ConnectionState.waiting) {
+                    return const Padding(
+                      padding: EdgeInsets.all(40),
+                      child: Center(
+                        child: CircularProgressIndicator(
+                            color: AppTheme.accentGold),
+                      ),
+                    );
+                  }
+                  final result = snap.data;
+                  if (snap.hasError ||
+                      result == null ||
+                      result.isFailure) {
+                    return Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Text(
+                        result?.error ??
+                            snap.error?.toString() ??
+                            'Could not load client breakdown',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.dmSans(
+                          fontSize: 13,
+                          color: AppTheme.textLight,
+                        ),
+                      ),
+                    );
+                  }
+                  final clients = result.data!.clients;
+                  if (clients.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Text(
+                        'No client opportunities in this category yet.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.dmSans(
+                          fontSize: 13,
+                          color: AppTheme.textLight,
+                        ),
+                      ),
+                    );
+                  }
+                  return ListView.separated(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+                    itemCount: clients.length,
+                    separatorBuilder: (_, __) =>
+                        const Divider(height: 1, color: Color(0xFFF1EDE5)),
+                    itemBuilder: (context, i) => _BreakdownClientTile(
+                      entry: clients[i],
+                      accent: color,
+                      onTap: () => onOpenClient(clients[i].clientPan),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BreakdownClientTile extends StatelessWidget {
+  final CategoryClientEntry entry;
+  final Color accent;
+  final VoidCallback onTap;
+  const _BreakdownClientTile({
+    required this.entry,
+    required this.accent,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(19),
+              ),
+              child: Center(
+                child: Text(
+                  _initials(entry.displayName),
+                  style: GoogleFonts.dmSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.primaryNavy,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.displayName,
+                    style: GoogleFonts.dmSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.primaryNavy,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'PAN ${entry.clientPan} · '
+                    '${entry.actionCount} ${entry.actionCount == 1 ? "item" : "items"}',
+                    style: GoogleFonts.dmSans(
+                      fontSize: 11,
+                      color: AppTheme.textLight,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  _formatRupees(entry.totalOpportunity),
+                  style: GoogleFonts.dmSans(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.primaryNavy,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  entry.pending > 0
+                      ? 'Pending ${_formatRupees(entry.pending)}'
+                      : 'Converted ${_formatRupees(entry.converted)}',
+                  style: GoogleFonts.dmSans(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: entry.pending > 0
+                        ? AppTheme.accentGold
+                        : AppTheme.successGreen,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: AppTheme.textLight,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

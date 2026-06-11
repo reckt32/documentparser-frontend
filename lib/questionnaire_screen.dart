@@ -1197,6 +1197,8 @@ if (resp.statusCode == 201) {
         if (_addGoals)
           Column(
             children: [
+              for (int i = 0; i < _goalCtrls.length; i++)
+                _goalTile(i, _goalCtrls[i]),
               ElevatedButton(
                 onPressed: () {
                   setState(() {
@@ -1215,8 +1217,6 @@ if (resp.statusCode == 201) {
                 },
                 child: const Text('Add Goal'),
               ),
-              for (int i = 0; i < _goalCtrls.length; i++)
-                _goalTile(i, _goalCtrls[i]),
             ],
           ),
         const Divider(height: 32),
@@ -2355,7 +2355,7 @@ if (resp.statusCode == 201) {
               SizedBox(
                 width: 600,
                 child: Text(
-                  'Complete this comprehensive questionnaire to help us understand your financial situation, goals, and risk profile. The information you provide will be used to generate a personalized financial plan.',
+                  'Complete this comprehensive questionnaire to assess your goals, risk profile and overall financial health.',
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: Colors.white.withValues(alpha: 0.9),
                     fontSize: 16,
@@ -2400,12 +2400,10 @@ if (resp.statusCode == 201) {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Your documents are not stored by us. They are processed once to extract '
-                      'financial data and then immediately deleted. You can skip any document type '
-                      'and fill in your details manually here. The information you provide is used '
-                      'only to generate your personalised financial plan and is never shared with '
-                      'third parties. This questionnaire is an educational planning tool, not '
-                      'personalised investment advice.',
+                      'Your responses are processed in real time to generate your financial plan and '
+                      'are not stored on our servers. This questionnare is an educational financial planning '
+                      'tool and does constitute investment advice as defined under the SEBI (Investment '
+                      'Advisors) Regulations, 2013 ',                    
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Colors.white.withValues(alpha: 0.85),
                         height: 1.5,

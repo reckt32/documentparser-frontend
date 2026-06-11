@@ -82,6 +82,80 @@ class CategoryMetric {
 }
 
 /// ------------------------------------------------------------------
+/// Per-client breakdown of one category, from
+/// `GET /api/dashboard/category/<dimension>`.
+/// ------------------------------------------------------------------
+
+@immutable
+class CategoryClientEntry {
+  final String clientPan;
+  final String? clientName;
+  final double totalOpportunity;
+  final double converted;
+  final double pending;
+  final int actionCount;
+
+  const CategoryClientEntry({
+    required this.clientPan,
+    this.clientName,
+    required this.totalOpportunity,
+    required this.converted,
+    required this.pending,
+    required this.actionCount,
+  });
+
+  String get displayName =>
+      (clientName == null || clientName!.isEmpty) ? clientPan : clientName!;
+
+  factory CategoryClientEntry.fromJson(Map<String, dynamic> json) {
+    return CategoryClientEntry(
+      clientPan: (json['client_pan'] ?? '').toString(),
+      clientName: json['client_name']?.toString(),
+      totalOpportunity: _asDouble(json['total_opportunity']),
+      converted: _asDouble(json['converted']),
+      pending: _asDouble(json['pending']),
+      actionCount: _asInt(json['action_count']),
+    );
+  }
+}
+
+@immutable
+class CategoryBreakdown {
+  final String dimension;
+  final double totalOpportunity;
+  final double converted;
+  final double pending;
+  final int clientCount;
+  final List<CategoryClientEntry> clients;
+
+  const CategoryBreakdown({
+    required this.dimension,
+    required this.totalOpportunity,
+    required this.converted,
+    required this.pending,
+    required this.clientCount,
+    required this.clients,
+  });
+
+  factory CategoryBreakdown.fromJson(Map<String, dynamic> json) {
+    final clients = (json['clients'] as List?)
+            ?.whereType<Map>()
+            .map((c) =>
+                CategoryClientEntry.fromJson(c.cast<String, dynamic>()))
+            .toList() ??
+        const <CategoryClientEntry>[];
+    return CategoryBreakdown(
+      dimension: (json['dimension'] ?? '').toString(),
+      totalOpportunity: _asDouble(json['total_opportunity']),
+      converted: _asDouble(json['converted']),
+      pending: _asDouble(json['pending']),
+      clientCount: _asInt(json['client_count']),
+      clients: clients,
+    );
+  }
+}
+
+/// ------------------------------------------------------------------
 /// One row in the active reports list (overview response).
 /// ------------------------------------------------------------------
 

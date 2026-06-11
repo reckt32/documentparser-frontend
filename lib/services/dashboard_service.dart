@@ -17,6 +17,21 @@ class DashboardService {
     return _wrap(resp, (data) => DashboardOverview.fromJson(data));
   }
 
+  /// `GET /api/dashboard/category/<dimension>` — which clients make up a
+  /// category's opportunity total, and for what amount.
+  Future<DashboardResult<CategoryBreakdown>> getCategoryBreakdown(
+    String dimension,
+  ) async {
+    final normalized = dimension.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return DashboardResult.failure('Category is required');
+    }
+    final resp = await _api.get(
+      '/api/dashboard/category/${Uri.encodeComponent(normalized)}',
+    );
+    return _wrap(resp, (data) => CategoryBreakdown.fromJson(data));
+  }
+
   /// `GET /api/dashboard/client/<pan>`
   Future<DashboardResult<ClientDetail>> getClientDetail(String pan) async {
     final normalized = pan.trim().toUpperCase();
