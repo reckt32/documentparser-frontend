@@ -10,7 +10,6 @@ import 'package:open_filex/open_filex.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:frontend/constants.dart';
 import 'package:frontend/app_theme.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 enum DocumentType { bankStatement, itr, insurance, mutualFundCAS }
 
@@ -98,11 +97,6 @@ class _UploadScreenState extends State<UploadScreen>
   int? _questionnaireId;
   bool _disclaimerShown = false;
 
-  // Manual CAS override state
-  final _manualSipCtrl = TextEditingController();
-  final _manualCorpusCtrl = TextEditingController();
-  bool _hasManualCASData = false;
-
   late AnimationController _animController;
   late Animation<double> _fadeIn;
 
@@ -127,8 +121,6 @@ class _UploadScreenState extends State<UploadScreen>
   @override
   void dispose() {
     _animController.dispose();
-    _manualSipCtrl.dispose();
-    _manualCorpusCtrl.dispose();
     super.dispose();
   }
 
@@ -304,201 +296,10 @@ class _UploadScreenState extends State<UploadScreen>
 
   void _skipUpload() {
     if (widget.onUploaded != null) {
-      // Pass manual CAS values if entered
-      Map<String, dynamic>? manualData;
-      if (_hasManualCASData) {
-        manualData = {
-          'docInsights': {
-            'manual_sip': double.tryParse(_manualSipCtrl.text.replaceAll(',', '')) ?? 0,
-            'manual_corpus': double.tryParse(_manualCorpusCtrl.text.replaceAll(',', '')) ?? 0,
-          },
-        };
-      }
-      widget.onUploaded!(null, manualData);
+      // Manual SIP/corpus entry lives on the questionnaire page (the
+      // "manual investment overrides" toggle), so nothing is passed here.
+      widget.onUploaded!(null, null);
     }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Manual CAS Entry Modal
-  // ---------------------------------------------------------------------------
-
-  void _showManualCASModal() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
-      ),
-      builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 24,
-            right: 24,
-            top: 24,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppTheme.borderLight,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'Manual Entry',
-                style: GoogleFonts.playfairDisplay(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.primaryNavy,
-                ),
-              ),
-              const SizedBox(height: 4),
-              AppTheme.goldAccentBar(width: 40, height: 2),
-              const SizedBox(height: 8),
-              Text(
-                'Enter your current SIP and corpus manually.',
-                style: GoogleFonts.dmSans(
-                  fontSize: 14,
-                  color: AppTheme.textMedium,
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Monthly SIP Card
-              _buildManualInputCard(
-                label: 'MONTHLY SIP AMOUNT',
-                hint: 'Total monthly SIP',
-                controller: _manualSipCtrl,
-                icon: Icons.auto_graph_outlined,
-              ),
-              const SizedBox(height: 16),
-
-              // Total Corpus Card
-              _buildManualInputCard(
-                label: 'TOTAL INVESTMENT CORPUS',
-                hint: 'Current portfolio value',
-                controller: _manualCorpusCtrl,
-                icon: Icons.account_balance_outlined,
-              ),
-              const SizedBox(height: 24),
-
-              // Save button
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      _hasManualCASData = true;
-                    });
-                    Navigator.pop(ctx);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryNavy,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                  child: Text(
-                    'Save',
-                    style: GoogleFonts.dmSans(
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildManualInputCard({
-    required String label,
-    required String hint,
-    required TextEditingController controller,
-    required IconData icon,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.primaryNavy.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(
-          color: AppTheme.accentGold.withValues(alpha: 0.3),
-          width: 1.5,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppTheme.accentGold.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Icon(icon, size: 20, color: AppTheme.accentGold),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: GoogleFonts.dmSans(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1.0,
-                    color: AppTheme.accentGold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                TextField(
-                  controller: controller,
-                  keyboardType: TextInputType.number,
-                  style: GoogleFonts.dmSans(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.primaryNavy,
-                  ),
-                  decoration: InputDecoration(
-                    prefixText: '₹ ',
-                    prefixStyle: GoogleFonts.dmSans(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textLight,
-                    ),
-                    hintText: hint,
-                    hintStyle: GoogleFonts.dmSans(
-                      fontSize: 14,
-                      color: AppTheme.textLight.withValues(alpha: 0.5),
-                    ),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
-                    isDense: true,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   // ---------------------------------------------------------------------------
@@ -999,23 +800,6 @@ class _UploadScreenState extends State<UploadScreen>
             fontWeight: FontWeight.w600,
           ),
         ),
-        // Manual entry button for CAS card
-        if (type == DocumentType.mutualFundCAS) ...[
-          const SizedBox(height: 4),
-          GestureDetector(
-            onTap: _showManualCASModal,
-            child: Text(
-              _hasManualCASData ? '✓ Manual data entered' : "Don't have a CAS? Enter manually",
-              textAlign: TextAlign.center,
-              style: GoogleFonts.dmSans(
-                fontSize: 11,
-                color: _hasManualCASData ? AppTheme.successGreen : AppTheme.accentGold,
-                fontWeight: FontWeight.w500,
-                decoration: _hasManualCASData ? null : TextDecoration.underline,
-              ),
-            ),
-          ),
-        ],
       ],
     );
   }
